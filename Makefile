@@ -2,6 +2,8 @@ CC   = clang
 LD   = ld.lld
 NASM = nasm
 
+BUILD_DIR = kbuild
+
 CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
          -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel \
          -O2 -Wall -Wextra -Ikernel -Ilimine
@@ -21,27 +23,36 @@ SRCS = kernel/main.c \
        kernel/fs/vfs.c \
        kernel/fs/ramfs.c \
        kernel/user/syscall.c \
-       kernel/user/elf.c \
        kernel/user/userspace.c \
+       kernel/drivers/net/pci.c \
+       kernel/drivers/net/virtio_net.c \
+       kernel/net/net.c \
        kernel/shell/shell.c \
+       kernel/gfx/gfx.c \
+       kernel/desktop/desktop.c \
        kernel/lib/printf.c
 
-OBJS = $(SRCS:.c=.o) \
-       kernel/arch/x86_64/entry.o \
-       kernel/arch/x86_64/gdt_asm.o \
-       kernel/arch/x86_64/isr.o \
-       kernel/sched/context_switch.o \
-       kernel/user/syscall_asm.o \
-       kernel/user/userspace_asm.o
+# Convert source paths → build paths
+OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(BUILD_DIR)/kernel/arch/x86_64/entry.o \
+       $(BUILD_DIR)/kernel/arch/x86_64/gdt_asm.o \
+       $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
+       $(BUILD_DIR)/kernel/sched/context_switch.o \
+       $(BUILD_DIR)/kernel/user/syscall_asm.o \
+       $(BUILD_DIR)/kernel/user/userspace_asm.o
 
 KERNEL = kernel.elf
 
 all: iso
 
-%.o: %.c
+# Compile C → build/...
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.asm
+# Assemble ASM → build/...
+$(BUILD_DIR)/%.o: %.asm
+	@mkdir -p $(dir $@)
 	$(NASM) -f elf64 $< -o $@
 
 $(KERNEL): $(OBJS)
@@ -67,7 +78,8 @@ iso: $(KERNEL)
 		-o nexusos.iso
 
 run: iso
-	qemu-system-x86_64 -cdrom nexusos.iso
+	qemu-system-x86_64 -cdrom nexusos.iso -cpu qemu64,+syscall \
+		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
 
 clean:
-	rm -rf $(OBJS) $(KERNEL) nexusos.iso iso/
+	rm -rf $(BUILD_DIR) $(KERNEL) nexusos.iso iso/

@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <limine.h>
 
+struct limine_framebuffer *fb_get(void);
+
 void fb_init(struct limine_framebuffer *fb);
 void fb_clear(uint32_t colour);
 uint32_t fb_colour(uint8_t r, uint8_t g, uint8_t b);

@@ -63,7 +63,7 @@ typedef struct
     gdt_entry_t null;
     gdt_entry_t kernel_code;
     gdt_entry_t kernel_data;
-    gdt_entry_t user_data; // 0x18 — must be before user_code for sysret
+    gdt_entry_t user_data; // 0x18 — must come before user_code for sysret
     gdt_entry_t user_code; // 0x20
     gdt_tss_entry_t tss;
 } __attribute__((packed)) gdt_t;
@@ -108,14 +108,14 @@ void gdt_init(void)
     // Null descriptor
     set_entry(&gdt.null, 0, 0, 0, 0);
 
-    // Kernel code: present, DPL=0, long mode
-    set_entry(&gdt.kernel_code, 0, 0xfffff, 0x9a, 0x2);
-    // Kernel data: present, DPL=0
-    set_entry(&gdt.kernel_data, 0, 0xfffff, 0x92, 0x0);
-    // User data: present, DPL=3 (must be at 0x18 for sysret)
-    set_entry(&gdt.user_data, 0, 0xfffff, 0xf2, 0x0);
-    // User code: present, DPL=3, long mode (must be at 0x20 for sysret)
-    set_entry(&gdt.user_code, 0, 0xfffff, 0xfa, 0x2);
+    // Kernel code: present, DPL=0, long mode, 4KiB granularity
+    set_entry(&gdt.kernel_code, 0, 0xfffff, 0x9a, 0x0a);
+    // Kernel data: present, DPL=0, 4KiB granularity
+    set_entry(&gdt.kernel_data, 0, 0xfffff, 0x92, 0x08);
+    // User code: present, DPL=3, long mode, 4KiB granularity
+    set_entry(&gdt.user_code, 0, 0xfffff, 0xfa, 0x0a);
+    // User data: present, DPL=3, 4KiB granularity
+    set_entry(&gdt.user_data, 0, 0xfffff, 0xf2, 0x08);
 
     // TSS
     for (size_t i = 0; i < sizeof(tss); i++)
@@ -123,6 +123,9 @@ void gdt_init(void)
     tss.iopb_offset = sizeof(tss);
 
     set_tss_entry(&gdt.tss, (uint64_t)&tss, sizeof(tss) - 1);
+
+    kprintf("GDT: gdt at 0x%x, sizeof=%u\n", (uint64_t)&gdt, sizeof(gdt));
+    kprintf("GDT: tss var at 0x%x, sizeof=%u\n", (uint64_t)&tss, sizeof(tss));
 
     // Load GDTR
     gdtr.limit = sizeof(gdt) - 1;
@@ -138,4 +141,14 @@ void gdt_init(void)
 void tss_set_kernel_stack(uint64_t rsp)
 {
     tss.rsp[0] = rsp;
+    kprintf("GDT: TSS RSP0 set to 0x%x\n", rsp);
+}
+
+// Dedicated exception stack — used as RSP0 in TSS
+// Must be in .bss so it's zeroed and definitely mapped
+static uint8_t exception_stack[8192] __attribute__((aligned(16)));
+
+uint64_t gdt_get_exception_stack(void)
+{
+    return (uint64_t)(exception_stack + sizeof(exception_stack));
 }

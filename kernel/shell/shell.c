@@ -6,6 +6,7 @@
 #include "../arch/x86_64/pit.h"
 #include "../sched/scheduler.h"
 #include "../fs/vfs.h"
+#include "../net/net.h"
 #include "../lib/printf.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -17,8 +18,6 @@
 
 static char cwd[VFS_PATH_MAX] = "/";
 
-// ─── String helpers ───────────────────────────────────────────────────────────
-
 static int sh_strlen(const char *s)
 {
     int n = 0;
@@ -26,7 +25,6 @@ static int sh_strlen(const char *s)
         n++;
     return n;
 }
-
 static int sh_strcmp(const char *a, const char *b)
 {
     while (*a && *b && *a == *b)
@@ -36,18 +34,16 @@ static int sh_strcmp(const char *a, const char *b)
     }
     return *a - *b;
 }
-
-static void sh_strcpy(char *dst, const char *src, int max)
+static void sh_strcpy(char *d, const char *s, int m)
 {
     int i = 0;
-    while (src[i] && i < max - 1)
+    while (s[i] && i < m - 1)
     {
-        dst[i] = src[i];
+        d[i] = s[i];
         i++;
     }
-    dst[i] = '\0';
+    d[i] = 0;
 }
-
 static void sh_memset(void *p, uint8_t v, int n)
 {
     uint8_t *b = p;
@@ -55,35 +51,29 @@ static void sh_memset(void *p, uint8_t v, int n)
         *b++ = v;
 }
 
-// Build absolute path from cwd + arg
 static void resolve_path(const char *arg, char *out, int max)
 {
     if (arg[0] == '/')
     {
         sh_strcpy(out, arg, max);
+        return;
     }
-    else
+    int cl = sh_strlen(cwd);
+    sh_strcpy(out, cwd, max);
+    if (cwd[cl - 1] != '/')
     {
-        int cl = sh_strlen(cwd);
-        sh_strcpy(out, cwd, max);
-        if (cwd[cl - 1] != '/')
-        {
-            out[cl] = '/';
-            out[cl + 1] = '\0';
-        }
-        // append arg
-        int ol = sh_strlen(out);
-        int i = 0;
-        while (arg[i] && ol + i < max - 1)
-        {
-            out[ol + i] = arg[i];
-            i++;
-        }
-        out[ol + i] = '\0';
+        out[cl] = '/';
+        out[cl + 1] = 0;
     }
+    int ol = sh_strlen(out);
+    int i = 0;
+    while (arg[i] && ol + i < max - 1)
+    {
+        out[ol + i] = arg[i];
+        i++;
+    }
+    out[ol + i] = 0;
 }
-
-// ─── Input ────────────────────────────────────────────────────────────────────
 
 static int readline(char *buf, int max)
 {
@@ -94,7 +84,7 @@ static int readline(char *buf, int max)
         if (c == '\n')
         {
             terminal_putchar('\n');
-            buf[len] = '\0';
+            buf[len] = 0;
             return len;
         }
         if (c == '\b')
@@ -109,7 +99,7 @@ static int readline(char *buf, int max)
         if (c == 3)
         {
             terminal_putchar('\n');
-            buf[0] = '\0';
+            buf[0] = 0;
             return 0;
         }
         if (len < max - 1)
@@ -136,7 +126,7 @@ static int parse_args(char *line, char **argv)
         while (*p && *p != ' ')
             p++;
         if (*p)
-            *p++ = '\0';
+            *p++ = 0;
     }
     argv[argc] = NULL;
     return argc;
@@ -148,23 +138,9 @@ static void cmd_help(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("Commands:\n");
-    kprintf("  help              this message\n");
-    kprintf("  clear             clear screen\n");
-    kprintf("  echo [args]       print text\n");
-    kprintf("  uname             OS info\n");
-    kprintf("  uptime            time since boot\n");
-    kprintf("  mem               memory usage\n");
-    kprintf("  threads           list threads\n");
-    kprintf("  ls [path]         list directory\n");
-    kprintf("  cd <path>         change directory\n");
-    kprintf("  pwd               print working dir\n");
-    kprintf("  cat <file>        print file contents\n");
-    kprintf("  write <f> <text>  write text to file\n");
-    kprintf("  mkdir <dir>       create directory\n");
-    kprintf("  rm <file>         delete file\n");
-    kprintf("  touch <file>      create empty file\n");
-    kprintf("  reboot            reboot system\n");
+    kprintf("Commands: help clear echo uname uptime mem threads\n");
+    kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
+    kprintf("          ifconfig ping arp\n");
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -196,24 +172,17 @@ static void cmd_uptime(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    uint64_t t = pit_ticks();
-    uint64_t secs = t / 100;
-    uint64_t mins = secs / 60;
-    uint64_t hours = mins / 60;
-    kprintf("up %u:%02u:%02u\n", hours, mins % 60, secs % 60);
+    uint64_t t = pit_ticks(), s = t / 100, m = s / 60, h = m / 60;
+    kprintf("up %u:%02u:%02u\n", h, m % 60, s % 60);
 }
 
 static void cmd_mem(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    size_t free_p = pmm_free_pages();
-    size_t total_p = pmm_total_pages();
-    size_t used_p = total_p - free_p;
-    kprintf("Total: %u MB  Used: %u MB  Free: %u MB\n",
-            (total_p * 4096) / (1024 * 1024),
-            (used_p * 4096) / (1024 * 1024),
-            (free_p * 4096) / (1024 * 1024));
+    size_t f = pmm_free_pages(), t = pmm_total_pages(), u = t - f;
+    kprintf("Total:%uMB Used:%uMB Free:%uMB\n",
+            (t * 4096) / (1024 * 1024), (u * 4096) / (1024 * 1024), (f * 4096) / (1024 * 1024));
 }
 
 static void cmd_threads(int argc, char **argv)
@@ -221,14 +190,13 @@ static void cmd_threads(int argc, char **argv)
     (void)argc;
     (void)argv;
     extern thread_t threads[MAX_THREADS];
-    static const char *states[] = {"dead", "ready", "running", "blocked"};
+    static const char *st[] = {"dead", "ready", "running", "blocked"};
     kprintf("%-4s %-16s %s\n", "ID", "NAME", "STATE");
     for (int i = 0; i < MAX_THREADS; i++)
     {
         if (threads[i].state == THREAD_DEAD)
             continue;
-        kprintf("%-4u %-16s %s\n",
-                threads[i].id, threads[i].name, states[threads[i].state]);
+        kprintf("%-4u %-16s %s\n", threads[i].id, threads[i].name, st[threads[i].state]);
     }
 }
 
@@ -246,12 +214,12 @@ static void cmd_cd(int argc, char **argv)
         kprintf("cd: missing argument\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     uint32_t type;
     if (vfs_stat(path, &type, NULL) < 0)
     {
-        kprintf("cd: %s: no such directory\n", argv[1]);
+        kprintf("cd: %s: not found\n", argv[1]);
         return;
     }
     if (type != VFS_DIR)
@@ -264,30 +232,28 @@ static void cmd_cd(int argc, char **argv)
 
 static void cmd_ls(int argc, char **argv)
 {
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     if (argc < 2)
         sh_strcpy(path, cwd, VFS_PATH_MAX);
     else
         resolve_path(argv[1], path, VFS_PATH_MAX);
-
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0)
     {
         kprintf("ls: %s: not found\n", path);
         return;
     }
-
     char name[VFS_NAME_MAX];
     uint32_t idx = 0;
     while (vfs_readdir(fd, idx++, name) == 0)
     {
-        char full[VFS_PATH_MAX];
+        static char full[VFS_PATH_MAX];
         int pl = sh_strlen(path);
         sh_strcpy(full, path, VFS_PATH_MAX);
-        if (pl > 0 && full[pl - 1] != '/')
+        if (full[pl - 1] != '/')
         {
             full[pl] = '/';
-            full[pl + 1] = '\0';
+            full[pl + 1] = 0;
             pl++;
         }
         int ni = 0;
@@ -296,12 +262,10 @@ static void cmd_ls(int argc, char **argv)
             full[pl + ni] = name[ni];
             ni++;
         }
-        full[pl + ni] = '\0';
-
+        full[pl + ni] = 0;
         uint32_t type = VFS_FILE;
         uint64_t size = 0;
         vfs_stat(full, &type, &size);
-
         if (type == VFS_DIR)
             kprintf("%s/\n", name);
         else
@@ -317,21 +281,19 @@ static void cmd_cat(int argc, char **argv)
         kprintf("cat: missing filename\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
-
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0)
     {
         kprintf("cat: %s: not found\n", argv[1]);
         return;
     }
-
     uint8_t buf[256];
     int n;
     while ((n = vfs_read(fd, buf, sizeof(buf) - 1)) > 0)
     {
-        buf[n] = '\0';
+        buf[n] = 0;
         terminal_puts((char *)buf);
     }
     terminal_putchar('\n');
@@ -345,17 +307,14 @@ static void cmd_write(int argc, char **argv)
         kprintf("write: usage: write <file> <text>\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
-
     int fd = vfs_open(path, O_WRONLY | O_CREAT | O_TRUNC);
     if (fd < 0)
     {
         kprintf("write: cannot open %s\n", argv[1]);
         return;
     }
-
-    // Join remaining args with spaces
     for (int i = 2; i < argc; i++)
     {
         vfs_write(fd, argv[i], sh_strlen(argv[i]));
@@ -373,10 +332,10 @@ static void cmd_touch(int argc, char **argv)
         kprintf("touch: missing filename\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_create(path) < 0)
-        kprintf("touch: failed to create %s\n", argv[1]);
+        kprintf("touch: failed\n");
 }
 
 static void cmd_mkdir(int argc, char **argv)
@@ -386,10 +345,10 @@ static void cmd_mkdir(int argc, char **argv)
         kprintf("mkdir: missing dirname\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_mkdir(path) < 0)
-        kprintf("mkdir: failed to create %s\n", argv[1]);
+        kprintf("mkdir: failed\n");
 }
 
 static void cmd_rm(int argc, char **argv)
@@ -399,7 +358,7 @@ static void cmd_rm(int argc, char **argv)
         kprintf("rm: missing filename\n");
         return;
     }
-    char path[VFS_PATH_MAX];
+    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_unlink(path) < 0)
         kprintf("rm: %s: not found\n", argv[1]);
@@ -412,25 +371,58 @@ static void cmd_reboot(int argc, char **argv)
     kprintf("Rebooting...\n");
     uint8_t v = 0;
     while (v & 0x02)
-        __asm__ volatile("inb $0x64, %0" : "=a"(v));
-    __asm__ volatile("outb %0, $0x64" ::"a"((uint8_t)0xfe));
+        __asm__ volatile("inb $0x64,%0" : "=a"(v));
+    __asm__ volatile("outb %0,$0x64" ::"a"((uint8_t)0xfe));
     for (;;)
         __asm__ volatile("hlt");
 }
 
-// ─── exec command ────────────────────────────────────────────────────────────
-extern int exec(const char *path);
+// ─── Network commands ─────────────────────────────────────────────────────────
 
-static void cmd_exec(int argc, char **argv)
+static void cmd_ifconfig(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    kprintf("eth0: MAC " MAC_FMT "\n", MAC_ARGS(netif.mac));
+    kprintf("      IP  " IP_FMT "\n", IP_ARGS(netif.ip));
+    kprintf("      GW  " IP_FMT "\n", IP_ARGS(netif.gateway));
+}
+
+static void cmd_ping(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("exec: usage: exec <path>\n");
+        kprintf("ping: usage: ping <ip>\n");
         return;
     }
-    char path[VFS_PATH_MAX];
-    resolve_path(argv[1], path, VFS_PATH_MAX);
-    exec(path);
+    ip4_t dst = {0};
+    const char *s = argv[1];
+    int octet = 0, val = 0;
+    while (*s)
+    {
+        if (*s >= '0' && *s <= '9')
+            val = val * 10 + (*s - '0');
+        else if (*s == '.')
+        {
+            dst.b[octet++] = val;
+            val = 0;
+        }
+        s++;
+    }
+    dst.b[octet] = val;
+    kprintf("ping: " IP_FMT "\n", IP_ARGS(dst));
+    net_send_arp_request(dst);
+    for (volatile int i = 0; i < 10000000; i++)
+        ;
+    net_send_icmp_echo(dst, 1, 1);
+}
+
+static void cmd_arp(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    kprintf("arp: requesting gateway " IP_FMT "\n", IP_ARGS(netif.gateway));
+    net_send_arp_request(netif.gateway);
 }
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
@@ -440,26 +432,8 @@ typedef struct
     const char *name;
     void (*fn)(int, char **);
 } command_t;
-
 static const command_t commands[] = {
-    {"help", cmd_help},
-    {"clear", cmd_clear},
-    {"echo", cmd_echo},
-    {"uname", cmd_uname},
-    {"uptime", cmd_uptime},
-    {"mem", cmd_mem},
-    {"threads", cmd_threads},
-    {"pwd", cmd_pwd},
-    {"cd", cmd_cd},
-    {"ls", cmd_ls},
-    {"cat", cmd_cat},
-    {"write", cmd_write},
-    {"touch", cmd_touch},
-    {"mkdir", cmd_mkdir},
-    {"rm", cmd_rm},
-    {"reboot", cmd_reboot},
-    {"exec", cmd_exec},
-    {NULL, NULL}};
+    {"help", cmd_help}, {"clear", cmd_clear}, {"echo", cmd_echo}, {"uname", cmd_uname}, {"uptime", cmd_uptime}, {"mem", cmd_mem}, {"threads", cmd_threads}, {"pwd", cmd_pwd}, {"cd", cmd_cd}, {"ls", cmd_ls}, {"cat", cmd_cat}, {"write", cmd_write}, {"touch", cmd_touch}, {"mkdir", cmd_mkdir}, {"rm", cmd_rm}, {"reboot", cmd_reboot}, {"ifconfig", cmd_ifconfig}, {"ping", cmd_ping}, {"arp", cmd_arp}, {NULL, NULL}};
 
 static void dispatch(char *line)
 {
@@ -470,17 +444,13 @@ static void dispatch(char *line)
     if (!argc)
         return;
     for (int i = 0; commands[i].name; i++)
-    {
         if (sh_strcmp(argv[0], commands[i].name) == 0)
         {
             commands[i].fn(argc, argv);
             return;
         }
-    }
     kprintf("sh: command not found: %s\n", argv[0]);
 }
-
-// ─── Prompt ───────────────────────────────────────────────────────────────────
 
 static void print_prompt(void)
 {
@@ -494,12 +464,9 @@ static void print_prompt(void)
     terminal_puts("# ");
 }
 
-// ─── Entry ────────────────────────────────────────────────────────────────────
-
 void shell_run(void)
 {
     char input[INPUT_MAX];
-    __asm__ volatile("sti"); // ensure interrupts enabled in this thread
     kprintf("\nTermuOS 0.1.0 -- type 'help' for commands.\n\n");
     while (1)
     {

@@ -7,6 +7,11 @@ void fb_init(struct limine_framebuffer *fb)
     _fb = fb;
 }
 
+struct limine_framebuffer *fb_get(void)
+{
+    return _fb;
+}
+
 uint32_t fb_colour(uint8_t r, uint8_t g, uint8_t b)
 {
     return ((uint32_t)r << _fb->red_mask_shift) | ((uint32_t)g << _fb->green_mask_shift) | ((uint32_t)b << _fb->blue_mask_shift);
