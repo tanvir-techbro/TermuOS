@@ -5,6 +5,7 @@
 #include "drivers/video/fb.h"
 #include "drivers/video/terminal.h"
 #include "drivers/input/keyboard.h"
+#include "drivers/input/mouse.h"
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/gdt.h"
 #include "arch/x86_64/pit.h"
@@ -66,6 +67,7 @@ void kernel_main(void)
     vmm_init(hhdm_request.response->offset, read_cr3());
     heap_init();
     keyboard_init();
+    mouse_init();
 
     vfs_init();
     vfs_node_t *root = ramfs_create_root();

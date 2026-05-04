@@ -19,6 +19,7 @@ SRCS = kernel/main.c \
        kernel/drivers/video/fb.c \
        kernel/drivers/video/terminal.c \
        kernel/drivers/input/keyboard.c \
+       kernel/drivers/input/mouse.c \
        kernel/sched/scheduler.c \
        kernel/fs/vfs.c \
        kernel/fs/ramfs.c \

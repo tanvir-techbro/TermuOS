@@ -7,6 +7,7 @@
 #include "../sched/scheduler.h"
 #include "../fs/vfs.h"
 #include "../net/net.h"
+#include "../desktop/desktop.h"
 #include "../lib/printf.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -141,6 +142,7 @@ static void cmd_help(int argc, char **argv)
     kprintf("Commands: help clear echo uname uptime mem threads\n");
     kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
     kprintf("          ifconfig ping arp\n");
+    kprintf("          gui\n");
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -425,6 +427,12 @@ static void cmd_arp(int argc, char **argv)
     net_send_arp_request(netif.gateway);
 }
 
+// ─── GUI ─────────────────────────────────────────────────────────────────
+static void cmd_gui(int argc, char **argv)
+{
+    desktop_run();
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -433,7 +441,7 @@ typedef struct
     void (*fn)(int, char **);
 } command_t;
 static const command_t commands[] = {
-    {"help", cmd_help}, {"clear", cmd_clear}, {"echo", cmd_echo}, {"uname", cmd_uname}, {"uptime", cmd_uptime}, {"mem", cmd_mem}, {"threads", cmd_threads}, {"pwd", cmd_pwd}, {"cd", cmd_cd}, {"ls", cmd_ls}, {"cat", cmd_cat}, {"write", cmd_write}, {"touch", cmd_touch}, {"mkdir", cmd_mkdir}, {"rm", cmd_rm}, {"reboot", cmd_reboot}, {"ifconfig", cmd_ifconfig}, {"ping", cmd_ping}, {"arp", cmd_arp}, {NULL, NULL}};
+    {"help", cmd_help}, {"clear", cmd_clear}, {"echo", cmd_echo}, {"uname", cmd_uname}, {"uptime", cmd_uptime}, {"mem", cmd_mem}, {"threads", cmd_threads}, {"pwd", cmd_pwd}, {"cd", cmd_cd}, {"ls", cmd_ls}, {"cat", cmd_cat}, {"write", cmd_write}, {"touch", cmd_touch}, {"mkdir", cmd_mkdir}, {"rm", cmd_rm}, {"reboot", cmd_reboot}, {"ifconfig", cmd_ifconfig}, {"ping", cmd_ping}, {"arp", cmd_arp}, {"gui", cmd_gui}, {NULL, NULL}};
 
 static void dispatch(char *line)
 {

@@ -477,3 +477,78 @@ void gfx_set_clip(int x, int y, int w, int h)
 }
 
 void gfx_clear_clip(void) { _clipping = 0; }
+
+// cursor
+#define CURSOR_W 12
+#define CURSOR_H 19
+
+static uint32_t cursor_save[CURSOR_W * CURSOR_H];
+
+// 1 = draw, 0 = transparent
+static const uint8_t cursor_shape[CURSOR_H][CURSOR_W] = {
+    {1,0,0,0,0,0,0,0,0,0,0,0},
+    {1,1,0,0,0,0,0,0,0,0,0,0},
+    {1,2,1,0,0,0,0,0,0,0,0,0},
+    {1,2,2,1,0,0,0,0,0,0,0,0},
+    {1,2,2,2,1,0,0,0,0,0,0,0},
+    {1,2,2,2,2,1,0,0,0,0,0,0},
+    {1,2,2,2,2,2,1,0,0,0,0,0},
+    {1,2,2,2,2,2,2,1,0,0,0,0},
+    {1,2,2,2,2,2,2,2,1,0,0,0},
+    {1,2,2,2,2,2,2,2,2,1,0,0},
+    {1,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,1,1,1,1,1},
+    {1,2,2,2,1,2,2,1,0,0,0,0},
+    {1,2,2,1,0,1,2,2,1,0,0,0},
+    {1,2,1,0,0,1,2,2,1,0,0,0},
+    {1,1,0,0,0,0,1,2,2,1,0,0},
+    {1,0,0,0,0,0,1,2,2,1,0,0},
+    {0,0,0,0,0,0,0,1,2,1,0,0},
+    {0,0,0,0,0,0,0,0,1,0,0,0},
+};
+
+void gfx_cursor_erase(int x, int y)
+{
+    for (int row = 0; row < CURSOR_H; row++)
+    {
+        for (int col = 0; col < CURSOR_W; col++)
+        {
+            int px = x + col, py = y + row;
+            if (px >= 0 && px < _w && py >= 0 && py < _h)
+                put_pixel(px, py, cursor_save[row * CURSOR_W + col]);
+        }
+    }
+}
+
+void gfx_cursor_draw(int x, int y)
+{
+    uint32_t white = gfx_rgb(255, 255, 255);
+    uint32_t shadow = gfx_rgb(0, 0, 0);
+
+    // save fixels underneath
+    for (int row = 0; row < CURSOR_H; row++)
+    {
+        for (int col = 0; col < CURSOR_W; col++)
+        {
+            int px = x + col, py = y + row;
+            if (px >= 0 && px < _w && py >= 0 && py < _h)
+            {
+                uint32_t *rowptr = (uint32_t *)(_fb_base + py * _fb_pitch);
+                cursor_save[row * CURSOR_W + col] = rowptr[px];
+            }
+        }
+    }
+
+    // draw cursor
+    for (int row = 0; row < CURSOR_H; row++)
+    {
+        for (int col = 0; col < CURSOR_W; col++)
+        {
+            int px = x + col, py = y + row;
+            if (px < 0 || px >= _w || py < 0 || py >= _h) continue;
+            uint8_t v = cursor_shape[row][col];
+            if (v == 1) put_pixel(px, py, white);
+            else if (v == 2) put_pixel(px, py, shadow);
+        }
+    }
+}

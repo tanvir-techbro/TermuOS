@@ -1,6 +1,7 @@
 #include "desktop.h"
 #include "../gfx/gfx.h"
 #include "../drivers/input/keyboard.h"
+#include "../drivers/input/mouse.h"
 #include "../arch/x86_64/pit.h"
 #include "../lib/printf.h"
 #include <stdint.h>
@@ -407,11 +408,21 @@ void desktop_run(void)
     H = gfx_height();
     init_dock_apps();
 
+    // Set mouse screen bounds to match desktop resolution
+    mouse_set_screen(W, H);
+
     int hovered = -1;
     uint64_t last_tick = 0;
 
+    // Mouse and cursor state
+    mouse_state_t mouse_state;
+    int cursor_x = W / 2; // Start at centre
+    int cursor_y = H / 2;
+
     // Initial draw
     draw_desktop(hovered);
+    // Draw initial cursor
+    gfx_cursor_draw(cursor_x, cursor_y);
 
     // Simple event loop — keyboard navigation of dock
     // Left/Right arrows move dock focus, Enter "launches" app
@@ -453,8 +464,54 @@ void desktop_run(void)
             }
         }
 
+        // Poll mouse for movement
+        if (mouse_moved())
+        {
+            // erase old cursor
+            gfx_cursor_erase(cursor_x, cursor_y);
+
+            // Get new mouse state
+            mouse_state = mouse_get();
+            cursor_x = mouse_state.x;
+            cursor_y = mouse_state.y;
+
+            // Draw new cursor
+            gfx_cursor_draw(cursor_x, cursor_y);
+        }
+
+        // Handle mouse clicks (e.g., dock interaction)
+        if (mouse_state.left) // Assuming left button press
+        {
+            // Check if cursor is over dock icons
+            int dock_y_start = H - 72;
+            int dock_y_end = H;
+            if (cursor_y >= dock_y_start && cursor_y <= dock_y_end)
+            {
+                // Calculate which icon was clicked
+                int icon_width = 64;
+                int padding = 12;
+                int dock_start_x = (W - (N_APPS * icon_width + padding * 2)) / 2 + padding;
+                for (int i = 0; i < N_APPS; i++)
+                {
+                    int icon_x_start = dock_start_x + i * icon_width;
+                    int icon_x_end = icon_x_start + icon_width;
+                    if (cursor_x >= icon_x_start && cursor_x <= icon_x_end)
+                    {
+                        // Handle click on dock icon i (e.g., set hovered or "launch")
+                        hovered = i;
+                        draw_desktop(hovered);
+                        break;
+                    }
+                }
+            }
+            // Reset button state or debounce as needed
+        }
+
         __asm__ volatile("hlt");
     }
+
+    // Erase cursor before exiting
+    gfx_cursor_erase(cursor_x, cursor_y);
 
     // Restore terminal
     gfx_clear(RGB(0x0d, 0x0d, 0x0d));

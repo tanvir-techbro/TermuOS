@@ -56,3 +56,7 @@ void gfx_textf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...);
 // clipping
 void gfx_set_clip(int x, int y, int w, int h);
 void gfx_clear_clip(void);
+
+// cursor
+void gfx_cursor_draw(int x, int y);
+void gfx_cursor_erase(int x, int y);
