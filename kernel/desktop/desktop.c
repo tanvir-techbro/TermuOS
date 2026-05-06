@@ -355,6 +355,8 @@ void desktop_run(void)
         // Draw cursor ONCE after all rendering
         gfx_cursor_draw(ms.x, ms.y);
 
+        gfx_present();
+
         prev_x = ms.x;
         prev_y = ms.y;
 
@@ -369,6 +371,6 @@ void desktop_run(void)
         for (volatile int i = 0; i < 50000; i++)
             ;
     }
-    
+
     gfx_clear(RGB(0x0d, 0x0d, 0x0d));
 }

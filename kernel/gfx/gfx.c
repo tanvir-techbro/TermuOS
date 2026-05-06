@@ -1,12 +1,17 @@
 #include "gfx.h"
 #include "../drivers/video/fb.h"
 #include "../lib/printf.h"
+#include "../mm/heap.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
 
 // backbuffer
-static uint32_t *_backbuffer = NULL;
+#define MAX_W 1920
+#define MAX_H 1080
+
+static uint32_t backbuffer[MAX_W * MAX_H];
+static uint32_t *_backbuffer = backbuffer;
 
 // state
 static int _w, _h;
@@ -179,14 +184,28 @@ static inline int in_clip(int x, int y)
 
 static inline void put_pixel(int x, int y, uint32_t colour)
 {
-    uint32_t *row = (uint32_t *)(_fb_base + y * _fb_pitch);
-    row[x] = colour;
+    if (x < 0 || x >= _w || y < 0 || y >= _h)
+        return;
+
+    _backbuffer[y * _w + x] = colour;
 }
 
 void gfx_pixel(int x, int y, uint32_t colour)
 {
     if (in_clip(x, y))
         put_pixel(x, y, colour);
+}
+
+void gfx_present(void)
+{
+    for (int y = 0; y < _h; y++)
+    {
+        uint32_t *dst = (uint32_t *)(_fb_base + y * _fb_pitch);
+        uint32_t *src = &_backbuffer[y * _w];
+
+        for (int x = 0; x < _w; x++)
+            dst[x] = src[x];
+    }
 }
 
 // clear

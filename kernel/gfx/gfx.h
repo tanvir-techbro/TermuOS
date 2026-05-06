@@ -33,6 +33,9 @@ uint32_t gfx_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 int gfx_width(void);
 int gfx_height(void);
 
+// prototype
+void gfx_present(void);
+
 // primitives
 void gfx_clear(uint32_t colour);
 void gfx_pixel(int x, int y, uint32_t colour);
