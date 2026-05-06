@@ -45,13 +45,27 @@ void keyboard_init(void)
     kprintf("Keyboard: ready.\n");
 }
 
-int keyboard_haschar(void) { return inb(KBD_STATUS) & 0x01; }
+int keyboard_haschar(void) 
+{ 
+    uint8_t status = inb(KBD_STATUS);
+    // Data available AND not mouse data (bit 5 must be 0 for keyboard)
+    return (status & 0x01) && !(status & 0x20);
+}
 
 char keyboard_getchar(void)
 {
     while (1) {
         while (!(inb(KBD_STATUS) & 0x01))
             ;
+
+        // Check AUX flag (bit 5) - skip if this is mouse data, not keyboard
+        uint8_t status = inb(KBD_STATUS);
+        if (status & 0x20)
+        {
+            // This is mouse data, skip it
+            inb(KBD_DATA);
+            continue;
+        }
 
         uint8_t sc = inb(KBD_DATA);
 

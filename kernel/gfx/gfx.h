@@ -3,20 +3,20 @@
 #include <stddef.h>
 
 // colour helpers
-#define RGB(r,g,b) gfx_rgb(r,g,b)
-#define RGBA(r,g,b,a) gfx_rgba(r,g,b,a)
+#define RGB(r, g, b) gfx_rgb(r, g, b)
+#define RGBA(r, g, b, a) gfx_rgba(r, g, b, a)
 
 // common colours
-#define GFX_BLACK RGB(0,0,0)
-#define GFX_WHITE RGB(255,255,255)
-#define GFX_RED RGB(255,0,0)
-#define GFX_GREEN RGB(0,255,0)
-#define GFX_BLUE RGB(0,0,255)
-#define GFX_YELLOW RGB(255,255,0)
-#define GFX_CYAN RGB(0,255,255)
-#define GFX_MAGENTA RGB(255,0,255)
-#define GFX_GREY RGB(128,128,128)
-#define GFX_ORANGE RGB(255,165,0)
+#define GFX_BLACK RGB(0, 0, 0)
+#define GFX_WHITE RGB(255, 255, 255)
+#define GFX_RED RGB(255, 0, 0)
+#define GFX_GREEN RGB(0, 255, 0)
+#define GFX_BLUE RGB(0, 0, 255)
+#define GFX_YELLOW RGB(255, 255, 0)
+#define GFX_CYAN RGB(0, 255, 255)
+#define GFX_MAGENTA RGB(255, 0, 255)
+#define GFX_GREY RGB(128, 128, 128)
+#define GFX_ORANGE RGB(255, 165, 0)
 
 typedef struct
 {
@@ -57,6 +57,5 @@ void gfx_textf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...);
 void gfx_set_clip(int x, int y, int w, int h);
 void gfx_clear_clip(void);
 
-// cursor
+// ─── Cursor ───────────────────────────────────────────────────────────────────
 void gfx_cursor_draw(int x, int y);
-void gfx_cursor_erase(int x, int y);

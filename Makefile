@@ -76,11 +76,11 @@ iso: $(KERNEL)
 		-graft-points \
 		boot/=iso/boot \
 		limine.conf=iso/limine.conf \
-		-o nexusos.iso
+		-o termuos.iso
 
 run: iso
-	qemu-system-x86_64 -cdrom nexusos.iso -cpu qemu64,+syscall \
+	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
 		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) nexusos.iso iso/
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/

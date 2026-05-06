@@ -106,6 +106,12 @@ void exception_handler(registers_t *r)
 void idt_register_irq(uint8_t irq, irq_handler_t handler)
 {
     irq_handlers[irq] = handler;
+
+    // if IRQ comes from slave PIC (8-15),
+    // unmask cascade IRQ2 on master PIC too
+    if (irq >= 8)
+        pic_unmask(2);
+
     pic_unmask(irq);
 }
 

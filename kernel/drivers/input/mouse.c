@@ -3,152 +3,205 @@
 #include "../../lib/printf.h"
 #include <stdint.h>
 
-// PS/2 ports
-#define PS2_DATA    0x60
-#define PS2_STATUS  0x64
-#define PS2_CMD     0x64
+#define MOUSE_PORT_DATA 0x60
+#define MOUSE_PORT_CMD 0x64
+#define MOUSE_IRQ 12
 
-#define MOUSE_IRQ   12  // IRQ12 = PS/2 mouse
-
-// packet state
-static uint8_t packet[3];
-static int packet_idx = 0;
-static volatile mouse_state_t state = {0};
+static int mouse_cycle = 0;
+static uint8_t mouse_packet[3];
+static volatile mouse_state_t state;
 static volatile int changed = 0;
-
 static int screen_w = 1280;
-static int screen_h = 800;
+static int screen_h = 600;
+static volatile int mouse_ready = 0;
 
-// I/O helpers
-static inline void outb(uint16_t port, uint8_t val)
-{
-    __asm__ volatile("outb %0,%1" :: "a"(val), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port)
+static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1" ::"a"(v), "Nd"(p)); }
+static inline uint8_t inb(uint16_t p)
 {
     uint8_t v;
-    __asm__ volatile("inb %1,%0" : "=a"(v) : "Nd"(port));
+    __asm__ volatile("inb %1,%0" : "=a"(v) : "Nd"(p));
     return v;
 }
 
-static void ps2_wait_write(void)
+static void mouse_wait_write(void)
 {
     int timeout = 100000;
-    while ((inb(PS2_STATUS) & 0x02) && timeout--);
+    while (timeout-- && (inb(0x64) & 0x02))
+        ;
 }
 
-static void ps2_wait_read(void)
+static void mouse_wait_read(void)
 {
     int timeout = 100000;
-    while (!(inb(PS2_STATUS) & 0x01) && timeout--);
+    while (timeout-- && !(inb(0x64) & 0x01))
+        ;
 }
 
-static void ps2_write_cmd(uint8_t cmd)
+static void mouse_write(uint8_t val)
 {
-    ps2_wait_write();
-    outb(PS2_CMD, cmd);
+    mouse_wait_write();
+    outb(0x64, 0xD4);
+    mouse_wait_write();
+    outb(0x60, val);
 }
 
-static void ps2_write_data(uint8_t data)
+static uint8_t mouse_read(void)
 {
-    ps2_wait_write();
-    outb(PS2_DATA, data);
+    mouse_wait_read();
+    return inb(0x60);
 }
 
-static uint8_t ps2_read_data(void)
-{
-    ps2_wait_read();
-    return inb(PS2_DATA);
-}
-
-static void mouse_write(uint8_t cmd)
-{
-    ps2_write_cmd(0x04); // route next byte to mouse
-    ps2_write_data(cmd);
-    ps2_read_data(); // read ACK
-}
-
-// IRQ handler
+// Call from IRQ12 handler
 static void mouse_irq(registers_t *r)
 {
     (void)r;
-
-    // check output buffer full and aux data bit
-    uint8_t status = inb(PS2_STATUS);
-    if (!(status & 0x01)) return;
-    if (!(status & 0x20)) return; // not from mouse
-
-    uint8_t byte = inb(PS2_DATA);
-
-    packet[packet_idx++] = byte;
-
-    if (packet_idx == 1)
+    
+    if (!mouse_ready)
     {
-        // first byte: must have bit 3 set (always-1 bit)
-        if (!(byte & 0x08)) { packet_idx = 0; return; }
+        inb(0x60);
+        return;
     }
 
-    if (packet_idx < 3) return;
-    packet_idx = 0;
+    if (!(inb(0x64) & 1))
+        return; // no data available
 
-    // parse 3-byte packet
-    uint8_t flags = packet[0];
-    int8_t mx = (int8_t)packet[1];
-    int8_t my = (int8_t)packet[2];
+    uint8_t data = inb(MOUSE_PORT_DATA);
 
-    // apply sign extension from overflow bits
-    if (flags & 0x10) mx = (int8_t)(packet[1] | 0x100 - 256);
-    if (flags & 0x20) my = (int8_t)(packet[2] | 0x100 - 256);
+    // First byte: flags
+    if (mouse_cycle == 0 && !(data & 0x08))
+        return;
 
-    // discard on overflow
-    if (flags & 0xC0) return;
+    mouse_packet[mouse_cycle++] = data;
+    if (mouse_cycle < 3)
+        return;
 
-    state.dx = mx;
-    state.dy = -my; // Y is inverted
-    state.x += mx;
-    state.y -= my;
+    mouse_cycle = 0;
 
-    // clamp
-    if (state.x < 0) state.x = 0;
-    if (state.y < 0) state.y = 0;
-    if (state.x >= screen_w) state.x = screen_w - 1;
-    if (state.y >= screen_h) state.y = screen_h - 1;
+    // Decode packet
+    uint8_t flags = mouse_packet[0];
+    int dx = (int)mouse_packet[1] - ((flags & 0x10) ? 256 : 0);
+    int dy = (int)mouse_packet[2] - ((flags & 0x20) ? 256 : 0);
+    dy = -dy; // Y is inverted
+
+    state.dx = dx;
+    state.dy = dy;
+    state.x += dx;
+    state.y += dy;
+
+    if (state.x < 0)
+        state.x = 0;
+    if (state.x >= screen_w)
+        state.x = screen_w - 1;
+    if (state.y < 0)
+        state.y = 0;
+    if (state.y >= screen_h)
+        state.y = screen_h - 1;
 
     state.left = (flags & 0x01) ? 1 : 0;
     state.right = (flags & 0x02) ? 1 : 0;
     state.middle = (flags & 0x04) ? 1 : 0;
-
     changed = 1;
 }
 
-// init
 void mouse_init(void)
 {
-    // enable auxiliary mouse device
-    ps2_write_cmd(0xA8);
-
-    // enable interrupts for mouse (set bit 1 of compaq status byte)
-    ps2_write_cmd(0x20); // read compaq status
-    uint8_t status = ps2_read_data();
-    status |= 0x02; // enable IRQ12
-    status &= ~0x20; // enable mouse clock
-    ps2_write_cmd(0x60); // write compaq status
-    ps2_write_data(status);
-
-    // reset mouse
-    mouse_write(0xFF);
-
-    // set default settings
-    mouse_write(0xF6); // set defaults
-    mouse_write(0xF4); // enable data reporting
-
-    // Start at centre of screen
+    mouse_ready = 0;
     state.x = screen_w / 2;
     state.y = screen_h / 2;
 
+    // flush any pending data
+    while (inb(0x64) & 0x01)
+        inb(0x60);
+
+    // disable both devices during init
+    outb(0x64, 0xAD); // disable keyboard
+    for (volatile int i = 0; i < 10000; i++)
+        ;
+    outb(0x64, 0xA7); // disable mouse
+    for (volatile int i = 0; i < 10000; i++)
+        ;
+
+    // flush again
+    while (inb(0x64) & 0x01)
+        inb(0x60);
+
+    // read and modify controller config
+    outb(0x64, 0x20);
+    mouse_wait_read();
+    uint8_t config = inb(0x60);
+    config |= 0x01;  // enable keyboard interrupt
+    config |= 0x02;  // enable mouse interrupt
+    config &= ~0x20; // clear mouse disable bit
+    outb(0x64, 0x60);
+    mouse_wait_write();
+    outb(0x60, config);
+
+    // re-enable keyboard
+    outb(0x64, 0xAE);
+    for (volatile int i = 0; i < 10000; i++)
+        ;
+
+    // re-enable mouse
+    outb(0x64, 0xA8);
+    for (volatile int i = 0; i < 10000; i++)
+        ;
+
+    // reset mouse
+    mouse_write(0xFF);
+    mouse_wait_read();
+    uint8_t ack = inb(0x60); // should be 0xFA
+    if (ack != 0xFA) {
+        kprintf("Mouse: reset ack failed (0x%x)\n", ack);
+        return;
+    }
+    mouse_wait_read();
+    uint8_t test = inb(0x60); // 0xAA (self test passed)
+    if (test != 0xAA) {
+        kprintf("Mouse: self-test failed (0x%x)\n", test);
+        return;
+    }
+    mouse_wait_read();
+    uint8_t id = inb(0x60); // 0x00 (mouse ID)
+    kprintf("Mouse: id 0x%x\n", id);
+
+    // set defaults
+    mouse_write(0xF6);
+    mouse_wait_read();
+    inb(0x60); // ACK
+
+    // set sample rate to 40
+    mouse_write(0xF3);
+    mouse_wait_read();
+    inb(0x60);
+    mouse_write(40);
+    mouse_wait_read();
+    inb(0x60);
+
+    // set resolution to 4 counts/mm
+    mouse_write(0xE8);
+    mouse_wait_read();
+    inb(0x60); // ACK
+    mouse_write(0x02);
+    mouse_wait_read();
+    inb(0x60); // ACK
+
+    // set scaling to 1:1
+    mouse_write(0xE6);
+    mouse_wait_read();
+    inb(0x60); // ACK
+
+    // Enable data reporting
+    mouse_write(0xF4);
+    mouse_wait_read();
+    inb(0x60); // ACK
+
+    // Flush any remaining data
+    while (inb(0x64) & 0x01)
+        inb(0x60);
+
     idt_register_irq(MOUSE_IRQ, mouse_irq);
-    kprintf("Mouse: PS/2 ready.\n");
+    mouse_ready = 1;
+    kprintf("Mouse: ready.\n");
 }
 
 void mouse_set_screen(int w, int h)
@@ -161,16 +214,16 @@ void mouse_set_screen(int w, int h)
 
 mouse_state_t mouse_get(void)
 {
-    return (mouse_state_t)
-    {
-        .x = state.x, .y = state.y,
-        .dx = state.dx, .dy = state.dy,
-        .left = state.left, .right = state.right, .middle = state.middle
-    };
+    mouse_state_t s = state;
+    return s;
 }
 
 int mouse_moved(void)
 {
-    if (changed) { changed = 0; return 1; }
+    if (changed)
+    {
+        changed = 0;
+        return 1;
+    }
     return 0;
 }

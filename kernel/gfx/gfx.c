@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+// backbuffer
+static uint32_t *_backbuffer = NULL;
+
 // state
 static int _w, _h;
 static uint8_t _rs, _gs, _bs; // channel shifts from fb
@@ -217,7 +220,7 @@ void gfx_line(int x0, int y0, int x1, int y1, uint32_t colour)
     int dy = -(y1 > y0 ? y1 - y0 : y0 - y1);
     int sx = x0 < x1 ? 1 : -1;
     int sy = y0 < y1 ? 1 : -1;
-    int err = dx * dy;
+    int err = dx + dy;
 
     while (1)
     {
@@ -326,27 +329,61 @@ static void sort3(int *a, int *b, int *x1, int *y1, int *x2, int *y2)
 void gfx_fill_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t colour)
 {
     // sort by y: y0 <= y1 <= y2
-    if (y0 > y1) { int t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y2=t; }
-    if (y0 > y2) { int t; t=x0;x0=x2;x2=t; t=y0;y0=y2;y2=t; }
-    if (y1 > y2) { int t; t=x1;x1=x2;x2=t; t=y1;y1=y2;y2=t; }
+    if (y0 > y1)
+    {
+        int t;
+        t = x0;
+        x0 = x1;
+        x1 = t;
+        t = y0;
+        y0 = y1;
+        y1 = t;
+    }
+    if (y0 > y2)
+    {
+        int t;
+        t = x0;
+        x0 = x2;
+        x2 = t;
+        t = y0;
+        y0 = y2;
+        y2 = t;
+    }
+    if (y1 > y2)
+    {
+        int t;
+        t = x1;
+        x1 = x2;
+        x2 = t;
+        t = y1;
+        y1 = y2;
+        y2 = t;
+    }
     (void)sort3;
 
     int total_h = y2 - y0;
-    if (!total_h) return;
+    if (!total_h)
+        return;
 
     for (int y = y0; y <= y2; y++)
     {
         int upper = (y < y1);
         int seg_h = upper ? (y1 - y0 + 1) : (y2 - y1 + 1);
-        if (!seg_h) continue;
+        if (!seg_h)
+            continue;
 
         int alpha = (y - y0) * 256 / total_h;
-        int beta = upper ? ((y - y0) * 256 / (y1 - y0 + 1)) : ((y -y1) * 256 / (y2 - y1 + 1));
+        int beta = upper ? ((y - y0) * 256 / (y1 - y0 + 1)) : ((y - y1) * 256 / (y2 - y1 + 1));
 
         int ax = x0 + (x2 - x0) * alpha / 256;
         int bx = upper ? (x0 + (x1 - x0) * beta / 256) : (x1 + (x2 - x1) * beta / 256);
 
-        if (ax > bx) { int t=ax;ax=bx;bx=t; }
+        if (ax > bx)
+        {
+            int t = ax;
+            ax = bx;
+            bx = t;
+        }
         gfx_hline(ax, y, bx - ax + 1, colour);
     }
 }
@@ -354,30 +391,41 @@ void gfx_fill_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t 
 // rounded rectangles
 void gfx_rounded_rect(int x, int y, int w, int h, int r, uint32_t colour)
 {
-    gfx_hline(x+r, y, w-2*r, colour);
-    gfx_hline(x+r, y+h-1, w-2*r, colour);
-    gfx_vline(x, y+r, h-2*r, colour);
-    gfx_vline(x+w-1, y+r, h-2*r, colour);
+    gfx_hline(x + r, y, w - 2 * r, colour);
+    gfx_hline(x + r, y + h - 1, w - 2 * r, colour);
+    gfx_vline(x, y + r, h - 2 * r, colour);
+    gfx_vline(x + w - 1, y + r, h - 2 * r, colour);
 
     // corners using circle arcs
     int cx, cy, px = 0, py = r, d = 1 - r;
     while (px <= py)
     {
         // top left
-        cx = x+r; cy = y+r;
-        gfx_pixel(cx-px, cy-py, colour); gfx_pixel(cx-py, cy-px, colour);
+        cx = x + r;
+        cy = y + r;
+        gfx_pixel(cx - px, cy - py, colour);
+        gfx_pixel(cx - py, cy - px, colour);
         // top right
-        cx = x+w-1-r;
-        gfx_pixel(cx+px, cy-py, colour); gfx_pixel(cx+py, cy-px, colour);
+        cx = x + w - 1 - r;
+        gfx_pixel(cx + px, cy - py, colour);
+        gfx_pixel(cx + py, cy - px, colour);
         // bottom left
-        cx = x+r; cy = y+h-1-r;
-        gfx_pixel(cx-px, cy+py, colour); gfx_pixel(cx-py, cy+px, colour);
+        cx = x + r;
+        cy = y + h - 1 - r;
+        gfx_pixel(cx - px, cy + py, colour);
+        gfx_pixel(cx - py, cy + px, colour);
         // bottom right
-        cx = x+w-1-r;
-        gfx_pixel(cx+px, cy+py, colour); gfx_pixel(cx+py, cy+px, colour);
+        cx = x + w - 1 - r;
+        gfx_pixel(cx + px, cy + py, colour);
+        gfx_pixel(cx + py, cy + px, colour);
 
-        if (d < 0) d += 2*px + 3;
-        else { d += 2*(px-py) + 5; py--; }
+        if (d < 0)
+            d += 2 * px + 3;
+        else
+        {
+            d += 2 * (px - py) + 5;
+            py--;
+        }
         px++;
     }
 }
@@ -385,21 +433,22 @@ void gfx_rounded_rect(int x, int y, int w, int h, int r, uint32_t colour)
 void gfx_fill_rounded_rect(int x, int y, int w, int h, int r, uint32_t colour)
 {
     // fill center + top/bottom strips
-    gfx_fill_rect(x+r, y, w-2*r, h, colour);
-    gfx_fill_rect(x, y+r, r, h-2*r, colour);
-    gfx_fill_rect(x+w-r, y+r, r, h-2*r, colour);
+    gfx_fill_rect(x + r, y, w - 2 * r, h, colour);
+    gfx_fill_rect(x, y + r, r, h - 2 * r, colour);
+    gfx_fill_rect(x + w - r, y + r, r, h - 2 * r, colour);
 
     // fill corner circles
-    gfx_fill_circle(x+r, y+r, r, colour);
-    gfx_fill_circle(x+w-1-r, y+r, r, colour);
-    gfx_fill_circle(x+r, y+h-1-r, r, colour);
-    gfx_fill_circle(x+w-1-r, y+h-1-r, r, colour);
+    gfx_fill_circle(x + r, y + r, r, colour);
+    gfx_fill_circle(x + w - 1 - r, y + r, r, colour);
+    gfx_fill_circle(x + r, y + h - 1 - r, r, colour);
+    gfx_fill_circle(x + w - 1 - r, y + h - 1 - r, r, colour);
 }
 
 // text
 void gfx_char(int x, int y, char c, uint32_t fg, uint32_t bg)
 {
-    if (c < 32 || c > 127) c = '?';
+    if (c < 32 || c > 127)
+        c = '?';
     const uint8_t *glyph = font8x8[c - 32];
     for (int row = 0; row < 8; row++)
     {
@@ -416,7 +465,13 @@ void gfx_text(int x, int y, const char *s, uint32_t fg, uint32_t bg)
     int cx = x;
     while (*s)
     {
-        if (*s == '\n') { cx = x; y += 9; s++; continue; }
+        if (*s == '\n')
+        {
+            cx = x;
+            y += 9;
+            s++;
+            continue;
+        }
         gfx_char(cx, y, *s++, fg, bg);
         cx += 8;
     }
@@ -431,29 +486,52 @@ void gfx_textf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...)
     int i = 0;
     for (; *fmt && i < 255; fmt++)
     {
-        if (*fmt != '%') { buf[i++] = *fmt; continue; }
+        if (*fmt != '%')
+        {
+            buf[i++] = *fmt;
+            continue;
+        }
         fmt++;
         if (*fmt == 's')
         {
             const char *s = va_arg(args, const char *);
-            while (*s && i < 255) buf[i++] = *s++;
+            while (*s && i < 255)
+                buf[i++] = *s++;
         }
         else if (*fmt == 'd')
         {
             int v = va_arg(args, int);
-            if (v < 0) { buf[i++] = '-'; v = -v; }
-            char tmp[16]; int ti = 0;
-            if (!v) tmp[ti++] = '0';
-            while (v) { tmp[ti++] = '0' + v%10; v /= 10; }
-            while (ti--) buf[i++] = tmp[ti+1];
+            if (v < 0)
+            {
+                buf[i++] = '-';
+                v = -v;
+            }
+            char tmp[16];
+            int ti = 0;
+            if (!v)
+                tmp[ti++] = '0';
+            while (v)
+            {
+                tmp[ti++] = '0' + v % 10;
+                v /= 10;
+            }
+            while (ti--)
+                buf[i++] = tmp[ti + 1];
         }
         else if (*fmt == 'u')
         {
             unsigned v = va_arg(args, unsigned);
-            char tmp[16]; int ti = 0;
-            if (!v) tmp[ti++] = '0';
-            while (v) { tmp[ti++] = '0' + v%10; v /= 10; }
-            while (ti--) buf[i++] = tmp[ti+1];
+            char tmp[16];
+            int ti = 0;
+            if (!v)
+                tmp[ti++] = '0';
+            while (v)
+            {
+                tmp[ti++] = '0' + v % 10;
+                v /= 10;
+            }
+            while (ti--)
+                buf[i++] = tmp[ti + 1];
         }
         else if (*fmt == 'c')
         {
@@ -461,7 +539,8 @@ void gfx_textf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...)
         }
         else
         {
-            buf[i++] = '%'; buf[i++] = *fmt;
+            buf[i++] = '%';
+            buf[i++] = *fmt;
         }
     }
     buf[i] = 0;
@@ -472,13 +551,19 @@ void gfx_textf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...)
 // clipping
 void gfx_set_clip(int x, int y, int w, int h)
 {
-    _cx = x; _cy = y; _cw = w; _ch = h;
+    _cx = x;
+    _cy = y;
+    _cw = w;
+    _ch = h;
     _clipping = 1;
 }
 
 void gfx_clear_clip(void) { _clipping = 0; }
 
-// cursor
+// ─── Cursor ───────────────────────────────────────────────────────────────────
+// Classic arrow cursor — 12x19 pixels
+// We save/restore the pixels underneath
+
 #define CURSOR_W 12
 #define CURSOR_H 19
 
@@ -486,69 +571,48 @@ static uint32_t cursor_save[CURSOR_W * CURSOR_H];
 
 // 1 = draw, 0 = transparent
 static const uint8_t cursor_shape[CURSOR_H][CURSOR_W] = {
-    {1,0,0,0,0,0,0,0,0,0,0,0},
-    {1,1,0,0,0,0,0,0,0,0,0,0},
-    {1,2,1,0,0,0,0,0,0,0,0,0},
-    {1,2,2,1,0,0,0,0,0,0,0,0},
-    {1,2,2,2,1,0,0,0,0,0,0,0},
-    {1,2,2,2,2,1,0,0,0,0,0,0},
-    {1,2,2,2,2,2,1,0,0,0,0,0},
-    {1,2,2,2,2,2,2,1,0,0,0,0},
-    {1,2,2,2,2,2,2,2,1,0,0,0},
-    {1,2,2,2,2,2,2,2,2,1,0,0},
-    {1,2,2,2,2,2,2,2,2,2,1,0},
-    {1,2,2,2,2,2,2,1,1,1,1,1},
-    {1,2,2,2,1,2,2,1,0,0,0,0},
-    {1,2,2,1,0,1,2,2,1,0,0,0},
-    {1,2,1,0,0,1,2,2,1,0,0,0},
-    {1,1,0,0,0,0,1,2,2,1,0,0},
-    {1,0,0,0,0,0,1,2,2,1,0,0},
-    {0,0,0,0,0,0,0,1,2,1,0,0},
-    {0,0,0,0,0,0,0,0,1,0,0,0},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0},
+    {1, 2, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0},
+    {1, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0, 0},
+    {1, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0},
+    {1, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0},
+    {1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0},
+    {1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0},
+    {1, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1},
+    {1, 2, 2, 2, 1, 2, 2, 1, 0, 0, 0, 0},
+    {1, 2, 2, 1, 0, 1, 2, 2, 1, 0, 0, 0},
+    {1, 2, 1, 0, 0, 1, 2, 2, 1, 0, 0, 0},
+    {1, 1, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0},
+    {1, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 1, 2, 1, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
 };
-
-void gfx_cursor_erase(int x, int y)
-{
-    for (int row = 0; row < CURSOR_H; row++)
-    {
-        for (int col = 0; col < CURSOR_W; col++)
-        {
-            int px = x + col, py = y + row;
-            if (px >= 0 && px < _w && py >= 0 && py < _h)
-                put_pixel(px, py, cursor_save[row * CURSOR_W + col]);
-        }
-    }
-}
 
 void gfx_cursor_draw(int x, int y)
 {
     uint32_t white = gfx_rgb(255, 255, 255);
     uint32_t shadow = gfx_rgb(0, 0, 0);
 
-    // save fixels underneath
     for (int row = 0; row < CURSOR_H; row++)
     {
         for (int col = 0; col < CURSOR_W; col++)
         {
-            int px = x + col, py = y + row;
-            if (px >= 0 && px < _w && py >= 0 && py < _h)
-            {
-                uint32_t *rowptr = (uint32_t *)(_fb_base + py * _fb_pitch);
-                cursor_save[row * CURSOR_W + col] = rowptr[px];
-            }
-        }
-    }
+            int px = x + col;
+            int py = y + row;
 
-    // draw cursor
-    for (int row = 0; row < CURSOR_H; row++)
-    {
-        for (int col = 0; col < CURSOR_W; col++)
-        {
-            int px = x + col, py = y + row;
-            if (px < 0 || px >= _w || py < 0 || py >= _h) continue;
+            if (px < 0 || px >= _w || py < 0 || py >= _h)
+                continue;
+
             uint8_t v = cursor_shape[row][col];
-            if (v == 1) put_pixel(px, py, white);
-            else if (v == 2) put_pixel(px, py, shadow);
+
+            if (v == 1)
+                put_pixel(px, py, white);
+            else if (v == 2)
+                put_pixel(px, py, shadow);
         }
     }
 }
