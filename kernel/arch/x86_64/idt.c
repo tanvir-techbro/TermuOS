@@ -109,6 +109,7 @@ void idt_register_irq(uint8_t irq, irq_handler_t handler)
 
     // if IRQ comes from slave PIC (8-15),
     // unmask cascade IRQ2 on master PIC too
+    // (shit took 3 days to figure out 2 lines)
     if (irq >= 8)
         pic_unmask(2);
 
