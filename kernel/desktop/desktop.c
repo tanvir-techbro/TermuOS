@@ -1,11 +1,16 @@
 #include "desktop.h"
 #include "../gfx/gfx.h"
+#include "../gfx/bitmap.h"
 #include "../drivers/input/keyboard.h"
 #include "../drivers/input/mouse.h"
 #include "../arch/x86_64/pit.h"
 #include "../lib/printf.h"
 #include <stdint.h>
 #include <stddef.h>
+
+extern uint8_t _binary_assets_download_bmp_start[];
+
+static bitmap_t *terminal_icon;
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 #define COL_BG_TOP RGB(0x1a, 0x1a, 0x2e)
@@ -265,6 +270,14 @@ static void draw_terminal_window(void)
     int cx = wx + 12, cy = wy + 40;
     uint32_t tbg = COL_WIN_BG, tp = RGB(0x48, 0xda, 0xff), tt = GFX_WHITE, td = COL_PANEL_DIM;
 
+    terminal_icon = bmp_load(_binary_assets_download_bmp_start);
+
+    if (!terminal_icon)
+    {
+        gfx_text(40, 40, "BMP LOAD FAILED", GFX_WHITE, RGB(255,0,0));
+        return;
+    }
+
     gfx_text(cx, cy, "Last login: Mon Jan 1 00:00:00 2025", td, tbg);
     cy += 14;
     gfx_text(cx, cy, "root", tp, tbg);
@@ -289,6 +302,8 @@ static void draw_terminal_window(void)
     gfx_text(cx + 96, cy, ":~#", td, tbg);
     if ((pit_ticks() / 50) % 2 == 0)
         gfx_fill_rect(cx + 120, cy + 1, 8, 11, tt);
+
+    gfx_blit(terminal_icon, 32, 64);
 }
 
 // ─── Notification ─────────────────────────────────────────────────────────────
