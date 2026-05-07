@@ -1,4 +1,5 @@
 #pragma once
+#include "bitmap.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -62,3 +63,7 @@ void gfx_clear_clip(void);
 
 // ─── Cursor ───────────────────────────────────────────────────────────────────
 void gfx_cursor_draw(int x, int y);
+
+// Bitmap
+void gfx_blit(bitmap_t *bmp, int x, int y);
+void gfx_blit_alpha(bitmap_t *bmp, int x, int y);

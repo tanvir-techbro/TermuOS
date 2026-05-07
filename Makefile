@@ -3,6 +3,9 @@ LD   = ld.lld
 NASM = nasm
 
 BUILD_DIR = kbuild
+ASSETS = assets/download.bmp
+
+ASSET_OBJS = $(patsubst assets/%.bmp,$(BUILD_DIR)/assets/%.o,$(ASSETS))
 
 CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
          -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel \
@@ -30,6 +33,7 @@ SRCS = kernel/main.c \
        kernel/net/net.c \
        kernel/shell/shell.c \
        kernel/gfx/gfx.c \
+       kernel/gfx/bitmap.c \
        kernel/desktop/desktop.c \
        kernel/lib/printf.c
 
@@ -40,7 +44,8 @@ OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
        $(BUILD_DIR)/kernel/sched/context_switch.o \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
-       $(BUILD_DIR)/kernel/user/userspace_asm.o
+       $(BUILD_DIR)/kernel/user/userspace_asm.o \
+       $(ASSET_OBJS)
 
 KERNEL = kernel.elf
 
@@ -56,7 +61,16 @@ $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
 	$(NASM) -f elf64 $< -o $@
 
-$(KERNEL): $(OBJS)
+# Convert BMP → ELF object
+$(BUILD_DIR)/assets/%.o: assets/%.bmp
+	@mkdir -p $(dir $@)
+	x86_64-linux-gnu-objcopy \
+              -I binary \
+              -O elf64-x86-64 \
+              -B i386:x86-64 \
+              $< $@
+
+$(KERNEL): $(OBJS) $(ASSET_OBJS)
 	$(LD) -T kernel/arch/x86_64/linker.ld -nostdlib -m elf_x86_64 -o $@ $(OBJS)
 
 iso: $(KERNEL)

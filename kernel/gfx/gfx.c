@@ -635,3 +635,44 @@ void gfx_cursor_draw(int x, int y)
         }
     }
 }
+
+void gfx_blit(bitmap_t *bmp, int x, int y)
+{
+    if (!bmp)
+        return;
+
+    for (int py = 0; py < bmp->height; py++)
+    {
+        for (int px = 0; px < bmp->width; px++)
+        {
+            gfx_pixel(
+                x + px,
+                y + py,
+                bmp->pixels[py * bmp->width + px]
+            );
+        }
+    }
+}
+
+void gfx_blit_alpha(bitmap_t *bmp, int x, int y)
+{
+    if (!bmp)
+        return;
+
+    for (int py = 0; py < bmp->height; py++)
+    {
+        for (int px = 0; px < bmp->width; px++)
+        {
+            uint32_t c = bmp->pixels[py * bmp->width + px];
+
+            if (c != 0)
+            {
+                gfx_pixel(
+                    x + px,
+                    y + py,
+                    c
+                );
+            }
+        }
+    }
+}
