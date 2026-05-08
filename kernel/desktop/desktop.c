@@ -1,4 +1,6 @@
 #include "desktop.h"
+#include "../wm/wm.h"
+#include "../wm/apps.h"
 #include "../gfx/gfx.h"
 #include "../gfx/bitmap.h"
 #include "../drivers/input/keyboard.h"
@@ -336,56 +338,12 @@ static void draw_all(int dock_hover)
 
 void desktop_run(void)
 {
-    W = gfx_width();
-    H = gfx_height();
-    init_dock_apps();
-    mouse_set_screen(W, H);
-
-    int prev_x = W / 2, prev_y = H / 2;
-    int dock_hover = -1;
-    uint64_t last_clock = 0;
-
-    // Draw immediately
-    draw_all(-1);
-    gfx_cursor_draw(prev_x, prev_y);
-
-    while (1)
-    {
-        uint64_t now = pit_ticks();
-
-        mouse_state_t ms = mouse_get();
-
-        int hover = dock_hit_test(ms.x, ms.y);
-
-        if (hover != dock_hover)
-            dock_hover = hover;
-
-        // FULL REDRAW EVERY FRAME
-        draw_all(dock_hover);
-
-        // Optional clock update
-        if (now - last_clock > 100)
-            last_clock = now;
-
-        // Draw cursor ONCE after all rendering
-        gfx_cursor_draw(ms.x, ms.y);
-
-        gfx_present();
-
-        prev_x = ms.x;
-        prev_y = ms.y;
-
-        if (keyboard_haschar())
-        {
-            char c = keyboard_getchar();
-
-            if (c == 'q')
-                break;
-        }
-
-        for (volatile int i = 0; i < 50000; i++)
-            ;
-    }
-
-    gfx_clear(RGB(0x0d, 0x0d, 0x0d));
+    // Initialize window manager
+    wm_init();
+    
+    // Create applications (Terminal, Files, Clock, About)
+    apps_init();
+    
+    // Run the window manager main loop
+    wm_run();
 }

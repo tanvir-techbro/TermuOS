@@ -4,6 +4,7 @@
 #include "../drivers/input/mouse.h"
 #include "../arch/x86_64/pit.h"
 #include "../lib/printf.h"
+#include "../lib/string.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -59,6 +60,7 @@ static int resize_ow = 0, resize_oh = 0;
 
 static int focused_id = -1;
 static int needs_full_redraw = 1;
+static int dock_hover = -1;
 
 // Helpers
 static int str_len(const char *s)
@@ -84,6 +86,16 @@ static wm_window_t *find(int id)
     for (int i = 0; i < n_windows; i++)
         if (windows[i].id == id)
             return &windows[i];
+    return NULL;
+}
+
+static wm_window_t *find_by_title(const char *title)
+{
+    for (int i = 0; i < n_windows; i++)
+    {
+        if (strncmp(windows[i].title, title, 64) == 0)
+            return &windows[i];
+    }
     return NULL;
 }
 
@@ -164,25 +176,114 @@ static int in_resize_corner(wm_window_t *w, int px, int py)
 // Drawing
 static void draw_wallpaper(void)
 {
-    for (int i = 0; i < TASKBAR_Y; i++)
+    // Wallpaper between menubar (32px) and taskbar
+    int start_y = 32;  // Below menubar
+    int end_y = TASKBAR_Y;  // Above taskbar
+    int height = end_y - start_y;
+    
+    for (int i = 0; i < height; i++)
     {
-        int t = i * 256 / TASKBAR_Y;
+        int t = i * 256 / height;
         uint8_t r = (uint8_t)(0x1a + (int)(0x0f - 0x1a) * t / 256);
         uint8_t g = (uint8_t)(0x1a + (int)(0x3d - 0x1a) * t / 256);
         uint8_t b = (uint8_t)(0x2e + (int)(0x4a - 0x2e) * t / 256);
-        gfx_hline(0, i, W, gfx_rgb(r, g, b));
+        gfx_hline(0, start_y + i, W, gfx_rgb(r, g, b));
     }
     // Subtle glow
     for (int r = 150; r > 0; r -= 8)
     {
         uint8_t a = (uint8_t)(r / 8);
-        gfx_circle(W / 5, TASKBAR_Y * 3 / 4, r, gfx_rgb(0, a, a * 2));
+        gfx_circle(W / 5, start_y + height * 3 / 4, r, gfx_rgb(0, a, a * 2));
     }
     for (int r = 120; r > 0; r -= 8)
     {
         uint8_t a = (uint8_t)(r / 6);
-        gfx_circle(W * 4 / 5, TASKBAR_Y / 3, r, gfx_rgb(a, a * 2, 0x4a));
+        gfx_circle(W * 4 / 5, start_y + height / 3, r, gfx_rgb(a, a * 2, 0x4a));
     }
+}
+
+static void dock_get_icon_rect(int idx, int *x, int *y, int *w, int *h)
+{
+    const int icon_w = 80;
+    const int padding = 12;
+    const int dock_h = 80;
+    const int dock_w = 4 * icon_w + padding * 2;
+    const int dock_x = (W - dock_w) / 2;
+    const int dock_y = TASKBAR_Y - dock_h - 12;
+    *x = dock_x + padding + idx * icon_w + 16;
+    *y = dock_y + 8;
+    *w = 48;
+    *h = 48;
+}
+
+static int hit_dock(int px, int py)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        int x, y, w, h;
+        dock_get_icon_rect(i, &x, &y, &w, &h);
+        if (px >= x && px < x + w && py >= y && py < y + h)
+            return i;
+    }
+    return -1;
+}
+
+static void dock_click(int idx)
+{
+    static const char *dock_titles[4] = {"Terminal", "Files", "Clock", "About TermuOS"};
+    if (idx < 0 || idx >= 4)
+        return;
+    wm_window_t *w = find_by_title(dock_titles[idx]);
+    if (!w)
+        return;
+    if (w->flags & WM_FLAG_MINIMIZED)
+        wm_restore(w->id);
+    else if (w->id == focused_id)
+        wm_minimize(w->id);
+    else
+        wm_focus(w->id);
+}
+
+static void draw_dock(void)
+{
+    const int icon_w = 80;
+    const int padding = 12;
+    const int dock_h = 80;
+    const int dock_w = 4 * icon_w + padding * 2;
+    const int dock_x = (W - dock_w) / 2;
+    const int dock_y = TASKBAR_Y - dock_h - 12;
+
+    gfx_fill_rounded_rect(dock_x, dock_y, dock_w, dock_h, 16, RGB(0x24, 0x24, 0x2c));
+    gfx_rounded_rect(dock_x, dock_y, dock_w, dock_h, 16, RGB(0x3a, 0x3a, 0x3c));
+
+    const char *icons[4] = {">_", "[]", "⌂", "i"};
+    const char *labels[4] = {"Terminal", "Files", "Clock", "About"};
+
+    for (int i = 0; i < 4; i++)
+    {
+        int x, y, w, h;
+        dock_get_icon_rect(i, &x, &y, &w, &h);
+        uint32_t bg = (i == dock_hover) ? RGB(0x30, 0x6e, 0xff) : RGB(0x16, 0x16, 0x18);
+        uint32_t fg = (i == dock_hover) ? RGB(0xff, 0xff, 0xff) : RGB(0xff, 0xff, 0xff);
+        uint32_t border = (i == dock_hover) ? RGB(0x9e, 0xca, 0xff) : RGB(0x3a, 0x3a, 0x3c);
+
+        gfx_fill_rounded_rect(x, y, w, h, 12, bg);
+        gfx_rounded_rect(x, y, w, h, 12, border);
+
+        int sw = str_len(icons[i]) * 8;
+        gfx_text(x + (w - sw) / 2, y + 16, icons[i], fg, bg);
+        int lw = str_len(labels[i]) * 8;
+        gfx_text(x + (w - lw) / 2, y + h - 14, labels[i], COL_TASK_DIM, bg);
+    }
+}
+
+static void draw_menubar(void)
+{
+    // Top menu bar
+    gfx_fill_rect(0, 0, W, 32, RGB(0x2c, 0x2c, 0x2e));
+    gfx_hline(0, 31, W, RGB(0x3a, 0x3a, 0x3c));
+    gfx_fill_circle(16, 16, 10, RGB(0x48, 0xda, 0xff));
+    gfx_text(12, 12, "T", RGB(0x2c, 0x2c, 0x2e), 0);
 }
 
 static void draw_taskbar(void)
@@ -319,6 +420,9 @@ static void draw_window(wm_window_t *w)
     if (w->flags & WM_FLAG_MINIMIZED)
         return;
 
+    // Draw chrome background first
+    draw_window_chrome(w);
+
     // Set clip to window client area
     gfx_set_clip(w->x + WM_BORDER, w->y + WM_TITLE_H, w->w - WM_BORDER * 2, w->h - WM_TITLE_H - WM_BORDER);
 
@@ -329,17 +433,16 @@ static void draw_window(wm_window_t *w)
         gfx_fill_rect(w->x + WM_BORDER, w->y + WM_TITLE_H, w->w - WM_BORDER * 2, w->h - WM_TITLE_H - WM_BORDER, COL_WIN_BODY);
 
     gfx_clear_clip();
-
-    // Draw chrome on top (titlebar, border, buttons)
-    draw_window_chrome(w);
 }
 
 static void composite(void)
 {
     sort_by_z();
     draw_wallpaper();
+    draw_menubar();
     for (int i = 0; i < n_windows; i++)
         draw_window(&windows[i]);
+    draw_dock();
     draw_taskbar();
 }
 
@@ -393,7 +496,7 @@ void wm_destroy(int id)
     }
 }
 
-void vm_focus(int id)
+void wm_focus(int id)
 {
     wm_window_t *w = find(id);
     if (!w)
@@ -488,7 +591,7 @@ void wm_resize(int id, int nw, int nh)
     if (nh < WM_MIN_H)
         nh = WM_MIN_H;
     w->w = nw;
-    w->y = nh;
+    w->h = nh;
     needs_full_redraw = 1;
 }
 
@@ -522,6 +625,13 @@ static void handle_mouse(void)
     mouse_state_t ms = mouse_get();
     mx = ms.x;
     my = ms.y;
+    
+    // Clamp mouse to screen
+    if (mx < 0) mx = 0;
+    if (mx >= W) mx = W - 1;
+    if (my < 0) my = 0;
+    if (my >= H) my = H - 1;
+    
     mleft_prev = mleft;
     mleft = ms.left;
     mright = ms.right;
@@ -573,9 +683,24 @@ static void handle_mouse(void)
         return;
     }
 
+    // Hover state for dock
+    int new_dock_hover = hit_dock(mx, my);
+    if (new_dock_hover != dock_hover)
+    {
+        dock_hover = new_dock_hover;
+        needs_full_redraw = 1;
+    }
+
     // Click handling
     if (clicked)
     {
+        int dock_idx = hit_dock(mx, my);
+        if (dock_idx >= 0)
+        {
+            dock_click(dock_idx);
+            return;
+        }
+
         // Check taskbar window buttons
         if (my >= TASKBAR_Y)
         {
@@ -650,14 +775,13 @@ static void handle_mouse(void)
 // Main loop
 void wm_run(void)
 {
-    wm_init();
-    
     int prev_mx = W/2, prev_my = H/2;
     uint64_t last_tick = 0;
 
     // Initial composite
     composite();
     gfx_cursor_draw(prev_mx, prev_my);
+    gfx_present();
 
     while (1)
     {
@@ -669,23 +793,24 @@ void wm_run(void)
             // Just redraw taskbar clock area
             draw_taskbar();
             gfx_cursor_draw(mx, my);
+            gfx_present();
         }
 
         handle_mouse();
 
         if (needs_full_redraw)
         {
-            gfx_cursor_erase(prev_mx, prev_my);
             composite();
             gfx_cursor_draw(mx, my);
             prev_mx = mx; prev_my = my;
             needs_full_redraw = 0;
+            gfx_present();
         }
         else if (mx != prev_mx || my != prev_my)
         {
-            gfx_cursor_erase(prev_mx, prev_my);
             gfx_cursor_draw(mx, my);
             prev_mx = mx; prev_my = my;
+            gfx_present();
         }
 
         if (keyboard_haschar())

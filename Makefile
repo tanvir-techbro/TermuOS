@@ -34,8 +34,11 @@ SRCS = kernel/main.c \
        kernel/shell/shell.c \
        kernel/gfx/gfx.c \
        kernel/gfx/bitmap.c \
+       kernel/wm/wm.c \
+       kernel/wm/apps.c \
        kernel/desktop/desktop.c \
-       kernel/lib/printf.c
+       kernel/lib/printf.c \
+       kernel/lib/string.c
 
 # Convert source paths → build paths
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
