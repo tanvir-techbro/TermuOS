@@ -1,4 +1,5 @@
 #include "wm.h"
+#include "apps.h"
 #include "../gfx/gfx.h"
 #include "../drivers/input/keyboard.h"
 #include "../drivers/input/mouse.h"
@@ -235,13 +236,26 @@ static void dock_click(int idx)
         return;
     wm_window_t *w = find_by_title(dock_titles[idx]);
     if (!w)
-        return;
-    if (w->flags & WM_FLAG_MINIMIZED)
-        wm_restore(w->id);
-    else if (w->id == focused_id)
-        wm_minimize(w->id);
+    {
+        // Launch new app
+        switch (idx)
+        {
+        case 0: apps_launch_terminal(); break;
+        case 1: apps_launch_files(); break;
+        case 2: apps_launch_clock(); break;
+        case 3: apps_launch_about(); break;
+        }
+    }
     else
-        wm_focus(w->id);
+    {
+        // Toggle existing window
+        if (w->flags & WM_FLAG_MINIMIZED)
+            wm_restore(w->id);
+        else if (w->id == focused_id)
+            wm_minimize(w->id);
+        else
+            wm_focus(w->id);
+    }
 }
 
 static void draw_dock(void)

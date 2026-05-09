@@ -204,6 +204,29 @@ static void draw_clock(int id, int x, int y, int w, int h)
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+void apps_launch_terminal(void)
+{
+    int W = gfx_width();
+    wm_create("Terminal", W / 2 - 260, 50, 520, 300, WM_FLAG_RESIZABLE, draw_terminal);
+}
+
+void apps_launch_files(void)
+{
+    wm_create("Files", 30, 100, 480, 300, WM_FLAG_RESIZABLE, draw_files);
+}
+
+void apps_launch_clock(void)
+{
+    int W = gfx_width();
+    wm_create("Clock", W - 230, 50, 200, 220, 0, draw_clock);
+}
+
+void apps_launch_about(void)
+{
+    int W = gfx_width(), H = gfx_height();
+    wm_create("About TermuOS", W / 2 - 150, H / 2 - 180, 300, 360, 0, draw_about);
+}
+
 void apps_init(void)
 {
     int W = gfx_width(), H = gfx_height();
@@ -220,8 +243,8 @@ void apps_init(void)
     term_print("root@TermuOS:~# ");
 
     // Windows positioned below 32px menubar
-    wm_create("Terminal", W / 2 - 260, 50, 520, 300, WM_FLAG_RESIZABLE, draw_terminal);
-    wm_create("Files", 30, 100, 480, 300, WM_FLAG_RESIZABLE, draw_files);
-    wm_create("Clock", W - 230, 50, 200, 220, 0, draw_clock);
-    wm_create("About TermuOS", W / 2 - 150, H / 2 - 180, 300, 360, 0, draw_about);
+    apps_launch_terminal();
+    apps_launch_files();
+    apps_launch_clock();
+    apps_launch_about();
 }
