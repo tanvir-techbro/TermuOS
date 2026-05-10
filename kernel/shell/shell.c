@@ -11,6 +11,7 @@
 #include "../lib/printf.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #define INPUT_MAX 256
 #define MAX_ARGS 16
@@ -18,6 +19,200 @@
 #define USERNAME "root"
 
 static char cwd[VFS_PATH_MAX] = "/";
+
+static shell_output_fn shell_out = NULL;
+
+static void shell_emit_char(char c)
+{
+    if (shell_out)
+        shell_out(c);
+    else
+        terminal_putchar(c);
+}
+
+static void shell_print(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    while (*fmt)
+    {
+        if (*fmt != '%')
+        {
+            shell_emit_char(*fmt++);
+            continue;
+        }
+
+        fmt++;
+
+        int left_align = 0;
+        int zero_pad = 0;
+        int width = 0;
+
+        // flags
+        if (*fmt == '-')
+        {
+            left_align = 1;
+            fmt++;
+        }
+
+        if (*fmt == '0')
+        {
+            zero_pad = 1;
+            fmt++;
+        }
+
+        // width
+        while (*fmt >= '0' && *fmt <= '9')
+        {
+            width = width * 10 + (*fmt - '0');
+            fmt++;
+        }
+
+        char buf[64];
+        char *str = buf;
+        int len = 0;
+
+        switch (*fmt)
+        {
+        case 'c':
+        {
+            buf[0] = (char)va_arg(args, int);
+            buf[1] = 0;
+            len = 1;
+            break;
+        }
+
+        case 's':
+        {
+            str = va_arg(args, char *);
+
+            if (!str)
+                str = "(null)";
+
+            while (str[len])
+                len++;
+
+            break;
+        }
+
+        case 'd':
+        {
+            int n = va_arg(args, int);
+
+            if (n < 0)
+            {
+                buf[len++] = '-';
+                n = -n;
+            }
+
+            char tmp[32];
+            int ti = 0;
+
+            if (n == 0)
+                tmp[ti++] = '0';
+
+            while (n > 0)
+            {
+                tmp[ti++] = '0' + (n % 10);
+                n /= 10;
+            }
+
+            while (ti--)
+                buf[len++] = tmp[ti];
+
+            buf[len] = 0;
+            break;
+        }
+
+        case 'u':
+        {
+            unsigned int n = va_arg(args, unsigned int);
+
+            char tmp[32];
+            int ti = 0;
+
+            if (n == 0)
+                tmp[ti++] = '0';
+
+            while (n > 0)
+            {
+                tmp[ti++] = '0' + (n % 10);
+                n /= 10;
+            }
+
+            while (ti--)
+                buf[len++] = tmp[ti];
+
+            buf[len] = 0;
+            break;
+        }
+
+        case 'x':
+        {
+            unsigned int n = va_arg(args, unsigned int);
+
+            char hex[] = "0123456789abcdef";
+            char tmp[32];
+            int ti = 0;
+
+            if (n == 0)
+                tmp[ti++] = '0';
+
+            while (n > 0)
+            {
+                tmp[ti++] = hex[n & 0xF];
+                n >>= 4;
+            }
+
+            while (ti--)
+                buf[len++] = tmp[ti];
+
+            buf[len] = 0;
+            break;
+        }
+
+        case '%':
+        {
+            buf[0] = '%';
+            buf[1] = 0;
+            len = 1;
+            break;
+        }
+
+        default:
+        {
+            shell_emit_char('%');
+            shell_emit_char(*fmt);
+            fmt++;
+            continue;
+        }
+        }
+
+        int pad = width - len;
+        if (pad < 0)
+            pad = 0;
+
+        if (!left_align)
+        {
+            while (pad--)
+                shell_emit_char(zero_pad ? '0' : ' ');
+        }
+
+        for (int i = 0; i < len; i++)
+            shell_emit_char(str[i]);
+
+        if (left_align)
+        {
+            while (pad--)
+                shell_emit_char(' ');
+        }
+
+        fmt++;
+    }
+
+    va_end(args);
+}
 
 static int sh_strlen(const char *s)
 {
@@ -79,30 +274,39 @@ static void resolve_path(const char *arg, char *out, int max)
 static int readline(char *buf, int max)
 {
     int len = 0;
+
     while (1)
     {
         char c = keyboard_getchar();
+
+        // ignore empty/no-key values
+        if (c == 0)
+            continue;
+
+        if (c == '\r')
+            continue;
+
         if (c == '\n')
         {
             terminal_putchar('\n');
             buf[len] = 0;
             return len;
         }
+
         if (c == '\b')
         {
             if (len > 0)
             {
                 len--;
+
+                terminal_putchar('\b');
+                terminal_putchar(' ');
                 terminal_putchar('\b');
             }
+
             continue;
         }
-        if (c == 3)
-        {
-            terminal_putchar('\n');
-            buf[0] = 0;
-            return 0;
-        }
+
         if (len < max - 1)
         {
             buf[len++] = c;
@@ -139,10 +343,10 @@ static void cmd_help(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("Commands: help clear echo uname uptime mem threads\n");
-    kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
-    kprintf("          ifconfig ping arp\n");
-    kprintf("          gui\n");
+    shell_print("Commands: help clear echo uname uptime mem threads\n");
+    shell_print("          ls cd pwd cat write touch mkdir rm reboot\n");
+    shell_print("          ifconfig ping arp\n");
+    shell_print("          gui\n");
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -167,7 +371,7 @@ static void cmd_uname(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("TermuOS 0.1.0 x86_64\n");
+    shell_print("TermuOS 0.1.0 x86_64\n");
 }
 
 static void cmd_uptime(int argc, char **argv)
@@ -175,7 +379,7 @@ static void cmd_uptime(int argc, char **argv)
     (void)argc;
     (void)argv;
     uint64_t t = pit_ticks(), s = t / 100, m = s / 60, h = m / 60;
-    kprintf("up %u:%02u:%02u\n", h, m % 60, s % 60);
+    shell_print("up %u:%02u:%02u\n", h, m % 60, s % 60);
 }
 
 static void cmd_mem(int argc, char **argv)
@@ -183,8 +387,8 @@ static void cmd_mem(int argc, char **argv)
     (void)argc;
     (void)argv;
     size_t f = pmm_free_pages(), t = pmm_total_pages(), u = t - f;
-    kprintf("Total:%uMB Used:%uMB Free:%uMB\n",
-            (t * 4096) / (1024 * 1024), (u * 4096) / (1024 * 1024), (f * 4096) / (1024 * 1024));
+    shell_print("Total:%uMB Used:%uMB Free:%uMB\n",
+                (t * 4096) / (1024 * 1024), (u * 4096) / (1024 * 1024), (f * 4096) / (1024 * 1024));
 }
 
 static void cmd_threads(int argc, char **argv)
@@ -193,12 +397,12 @@ static void cmd_threads(int argc, char **argv)
     (void)argv;
     extern thread_t threads[MAX_THREADS];
     static const char *st[] = {"dead", "ready", "running", "blocked"};
-    kprintf("%-4s %-16s %s\n", "ID", "NAME", "STATE");
+    shell_print("%-4s %-16s %s\n", "ID", "NAME", "STATE");
     for (int i = 0; i < MAX_THREADS; i++)
     {
         if (threads[i].state == THREAD_DEAD)
             continue;
-        kprintf("%-4u %-16s %s\n", threads[i].id, threads[i].name, st[threads[i].state]);
+        shell_print("%-4u %-16s %s\n", threads[i].id, threads[i].name, st[threads[i].state]);
     }
 }
 
@@ -206,14 +410,14 @@ static void cmd_pwd(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("%s\n", cwd);
+    shell_print("%s\n", cwd);
 }
 
 static void cmd_cd(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("cd: missing argument\n");
+        shell_print("cd: missing argument\n");
         return;
     }
     static char path[VFS_PATH_MAX];
@@ -221,12 +425,12 @@ static void cmd_cd(int argc, char **argv)
     uint32_t type;
     if (vfs_stat(path, &type, NULL) < 0)
     {
-        kprintf("cd: %s: not found\n", argv[1]);
+        shell_print("cd: %s: not found\n", argv[1]);
         return;
     }
     if (type != VFS_DIR)
     {
-        kprintf("cd: %s: not a directory\n", argv[1]);
+        shell_print("cd: %s: not a directory\n", argv[1]);
         return;
     }
     sh_strcpy(cwd, path, VFS_PATH_MAX);
@@ -242,7 +446,7 @@ static void cmd_ls(int argc, char **argv)
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0)
     {
-        kprintf("ls: %s: not found\n", path);
+        shell_print("ls: %s: not found\n", path);
         return;
     }
     char name[VFS_NAME_MAX];
@@ -269,9 +473,9 @@ static void cmd_ls(int argc, char **argv)
         uint64_t size = 0;
         vfs_stat(full, &type, &size);
         if (type == VFS_DIR)
-            kprintf("%s/\n", name);
+            shell_print("%s/\n", name);
         else
-            kprintf("%s  (%u bytes)\n", name, size);
+            shell_print("%s  (%u bytes)\n", name, size);
     }
     vfs_close(fd);
 }
@@ -280,7 +484,7 @@ static void cmd_cat(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("cat: missing filename\n");
+        shell_print("cat: missing filename\n");
         return;
     }
     static char path[VFS_PATH_MAX];
@@ -288,7 +492,7 @@ static void cmd_cat(int argc, char **argv)
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0)
     {
-        kprintf("cat: %s: not found\n", argv[1]);
+        shell_print("cat: %s: not found\n", argv[1]);
         return;
     }
     uint8_t buf[256];
@@ -306,7 +510,7 @@ static void cmd_write(int argc, char **argv)
 {
     if (argc < 3)
     {
-        kprintf("write: usage: write <file> <text>\n");
+        shell_print("write: usage: write <file> <text>\n");
         return;
     }
     static char path[VFS_PATH_MAX];
@@ -314,7 +518,7 @@ static void cmd_write(int argc, char **argv)
     int fd = vfs_open(path, O_WRONLY | O_CREAT | O_TRUNC);
     if (fd < 0)
     {
-        kprintf("write: cannot open %s\n", argv[1]);
+        shell_print("write: cannot open %s\n", argv[1]);
         return;
     }
     for (int i = 2; i < argc; i++)
@@ -331,46 +535,46 @@ static void cmd_touch(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("touch: missing filename\n");
+        shell_print("touch: missing filename\n");
         return;
     }
     static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_create(path) < 0)
-        kprintf("touch: failed\n");
+        shell_print("touch: failed\n");
 }
 
 static void cmd_mkdir(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("mkdir: missing dirname\n");
+        shell_print("mkdir: missing dirname\n");
         return;
     }
     static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_mkdir(path) < 0)
-        kprintf("mkdir: failed\n");
+        shell_print("mkdir: failed\n");
 }
 
 static void cmd_rm(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("rm: missing filename\n");
+        shell_print("rm: missing filename\n");
         return;
     }
     static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     if (vfs_unlink(path) < 0)
-        kprintf("rm: %s: not found\n", argv[1]);
+        shell_print("rm: %s: not found\n", argv[1]);
 }
 
 static void cmd_reboot(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("Rebooting...\n");
+    shell_print("Rebooting...\n");
     uint8_t v = 0;
     while (v & 0x02)
         __asm__ volatile("inb $0x64,%0" : "=a"(v));
@@ -385,16 +589,16 @@ static void cmd_ifconfig(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("eth0: MAC " MAC_FMT "\n", MAC_ARGS(netif.mac));
-    kprintf("      IP  " IP_FMT "\n", IP_ARGS(netif.ip));
-    kprintf("      GW  " IP_FMT "\n", IP_ARGS(netif.gateway));
+    shell_print("eth0: MAC " MAC_FMT "\n", MAC_ARGS(netif.mac));
+    shell_print("      IP  " IP_FMT "\n", IP_ARGS(netif.ip));
+    shell_print("      GW  " IP_FMT "\n", IP_ARGS(netif.gateway));
 }
 
 static void cmd_ping(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kprintf("ping: usage: ping <ip>\n");
+        shell_print("ping: usage: ping <ip>\n");
         return;
     }
     ip4_t dst = {0};
@@ -412,7 +616,7 @@ static void cmd_ping(int argc, char **argv)
         s++;
     }
     dst.b[octet] = val;
-    kprintf("ping: " IP_FMT "\n", IP_ARGS(dst));
+    shell_print("ping: " IP_FMT "\n", IP_ARGS(dst));
     net_send_arp_request(dst);
     for (volatile int i = 0; i < 10000000; i++)
         ;
@@ -423,7 +627,7 @@ static void cmd_arp(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("arp: requesting gateway " IP_FMT "\n", IP_ARGS(netif.gateway));
+    shell_print("arp: requesting gateway " IP_FMT "\n", IP_ARGS(netif.gateway));
     net_send_arp_request(netif.gateway);
 }
 
@@ -457,7 +661,7 @@ static void dispatch(char *line)
             commands[i].fn(argc, argv);
             return;
         }
-    kprintf("sh: command not found: %s\n", argv[0]);
+    shell_print("sh: command not found: %s\n", argv[0]);
 }
 
 static void print_prompt(void)
@@ -472,10 +676,15 @@ static void print_prompt(void)
     terminal_puts("# ");
 }
 
+void shell_set_output(shell_output_fn fn)
+{
+    shell_out = fn;
+}
+
 void shell_run(void)
 {
     char input[INPUT_MAX];
-    kprintf("\nTermuOS 0.1.0 -- type 'help' for commands.\n\n");
+    shell_print("\nTermuOS 0.1.0 -- type 'help' for commands.\n\n");
     while (1)
     {
         print_prompt();
