@@ -79,8 +79,8 @@ void kernel_main(void)
     int fd = vfs_open("/etc/motd", O_WRONLY | O_CREAT);
     if (fd >= 0)
     {
-        const char *motd = "Welcome to TermuOS!\n";
-        vfs_write(fd, motd, 20);
+        const char *motd = "snoop dog bob steve gary albert bryan dave\n";
+        vfs_write(fd, motd, 44);
         vfs_close(fd);
     }
 
@@ -93,7 +93,6 @@ void kernel_main(void)
     // Launch desktop
     __asm__ volatile("sti");
     desktop_run();
-
     // After desktop exits — fall back to terminal shell
     terminal_init();
     terminal_set_size(fb->width, fb->height);
