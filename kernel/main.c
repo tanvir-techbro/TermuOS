@@ -5,7 +5,6 @@
 #include "drivers/video/fb.h"
 #include "drivers/video/terminal.h"
 #include "drivers/input/keyboard.h"
-#include "drivers/input/mouse.h"
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/gdt.h"
 #include "arch/x86_64/pit.h"
@@ -17,8 +16,6 @@
 #include "fs/ramfs.h"
 #include "drivers/net/pci.h"
 #include "drivers/net/virtio_net.h"
-#include "gfx/gfx.h"
-#include "desktop/desktop.h"
 #include "shell/shell.h"
 #include "lib/printf.h"
 
@@ -57,7 +54,6 @@ void kernel_main(void)
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
-    gfx_init();
 
     // Init subsystems silently
     gdt_init();
@@ -67,7 +63,6 @@ void kernel_main(void)
     vmm_init(hhdm_request.response->offset, read_cr3());
     heap_init();
     keyboard_init();
-    mouse_init();
 
     vfs_init();
     vfs_node_t *root = ramfs_create_root();
@@ -90,10 +85,6 @@ void kernel_main(void)
     pci_init();
     virtio_net_init();
 
-    // Launch desktop
-    __asm__ volatile("sti");
-    desktop_run();
-    // After desktop exits — fall back to terminal shell
     terminal_init();
     terminal_set_size(fb->width, fb->height);
     terminal_set_bg(0x0d, 0x0d, 0x0d);

@@ -140,14 +140,14 @@ void terminal_set_size(uint64_t w, uint64_t h)
     cursor_y = PADDING;
 }
 
-void terminal_set_fg(uint8_t r, uint8_t g2, uint8_t b)
+void terminal_set_fg(uint8_t r, uint8_t g, uint8_t b)
 {
-    fg = fb_colour(r, g2, b);
+    fg = fb_colour(r, g, b);
 }
 
-void terminal_set_bg(uint8_t r, uint8_t g2, uint8_t b)
+void terminal_set_bg(uint8_t r, uint8_t g, uint8_t b)
 {
-    bg = fb_colour(r, g2, b);
+    bg = fb_colour(r, g, b);
     fb_clear(bg);
 }
 
