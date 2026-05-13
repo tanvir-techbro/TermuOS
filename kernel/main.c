@@ -19,6 +19,8 @@
 #include "shell/shell.h"
 #include "lib/printf.h"
 
+#include "config.h"
+
 LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests_start"))) static volatile LIMINE_REQUESTS_START_MARKER
@@ -82,8 +84,10 @@ void kernel_main(void)
     scheduler_init();
     pit_init(100);
 
+    #ifdef CONFIG_NET
     pci_init();
     virtio_net_init();
+    #endif
 
     terminal_init();
     terminal_set_size(fb->width, fb->height);

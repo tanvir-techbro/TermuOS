@@ -12,6 +12,8 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+#include "../config.h"
+
 #define INPUT_MAX 256
 #define MAX_ARGS 16
 #define HOSTNAME "TermuOS"
@@ -388,7 +390,7 @@ static void cmd_reboot(int argc, char **argv)
 }
 
 // ─── Network commands ─────────────────────────────────────────────────────────
-
+#ifdef CONFIG_NET
 static void cmd_ifconfig(int argc, char **argv)
 {
     (void)argc;
@@ -434,6 +436,7 @@ static void cmd_arp(int argc, char **argv)
     kprintf("arp: requesting gateway " IP_FMT "\n", IP_ARGS(netif.gateway));
     net_send_arp_request(netif.gateway);
 }
+#endif
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
@@ -443,7 +446,28 @@ typedef struct
     void (*fn)(int, char **);
 } command_t;
 static const command_t commands[] = {
-    {"help", cmd_help}, {"clear", cmd_clear}, {"echo", cmd_echo}, {"uname", cmd_uname}, {"uptime", cmd_uptime}, {"mem", cmd_mem}, {"threads", cmd_threads}, {"pwd", cmd_pwd}, {"cd", cmd_cd}, {"ls", cmd_ls}, {"cat", cmd_cat}, {"write", cmd_write}, {"touch", cmd_touch}, {"mkdir", cmd_mkdir}, {"rm", cmd_rm}, {"reboot", cmd_reboot}, {"ifconfig", cmd_ifconfig}, {"ping", cmd_ping}, {"arp", cmd_arp}, {NULL, NULL}};
+    {"help", cmd_help},
+    {"clear", cmd_clear}, 
+    {"echo", cmd_echo}, 
+    {"uname", cmd_uname}, 
+    {"uptime", cmd_uptime}, 
+    {"mem", cmd_mem}, 
+    {"threads", cmd_threads}, 
+    {"pwd", cmd_pwd}, 
+    {"cd", cmd_cd}, 
+    {"ls", cmd_ls}, 
+    {"cat", cmd_cat}, 
+    {"write", cmd_write}, 
+    {"touch", cmd_touch}, 
+    {"mkdir", cmd_mkdir}, 
+    {"rm", cmd_rm}, 
+    {"reboot", cmd_reboot},
+    #ifdef CONFIG_NET
+    {"ifconfig", cmd_ifconfig}, 
+    {"ping", cmd_ping}, 
+    {"arp", cmd_arp},
+    #endif
+    {NULL, NULL}};
 
 static void dispatch(char *line)
 {

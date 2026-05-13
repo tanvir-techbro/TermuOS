@@ -4,32 +4,64 @@ NASM = nasm
 
 BUILD_DIR = kbuild
 
+CONFIG_HEADER = kernel/config.h
+
+include .config
+
+SRCS :=
+
 CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
          -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel \
          -O2 -Wall -Wextra -Ikernel -Ilimine
 
-SRCS = kernel/main.c \
+SRCS += \
+       kernel/main.c \
        kernel/arch/x86_64/gdt.c \
        kernel/arch/x86_64/idt.c \
        kernel/arch/x86_64/pic.c \
-       kernel/arch/x86_64/pit.c \
+       kernel/arch/x86_64/pit.c
+
+SRCS += \
        kernel/mm/pmm.c \
        kernel/mm/vmm.c \
-       kernel/mm/heap.c \
-       kernel/drivers/video/fb.c \
-       kernel/drivers/video/terminal.c \
-       kernel/drivers/input/keyboard.c \
-       kernel/sched/scheduler.c \
-       kernel/fs/vfs.c \
-       kernel/fs/ramfs.c \
-       kernel/user/syscall.c \
-       kernel/user/userspace.c \
-       kernel/drivers/net/pci.c \
-       kernel/drivers/net/virtio_net.c \
-       kernel/net/net.c \
-       kernel/shell/shell.c \
+       kernel/mm/heap.c
+
+SRCS += \
        kernel/lib/printf.c \
        kernel/lib/string.c
+
+SRCS += \
+       kernel/drivers/input/keyboard.c \
+       kernel/sched/scheduler.c
+
+ifeq ($(CONFIG_FB),y)
+SRCS += \
+       kernel/drivers/video/fb.c \
+       kernel/drivers/video/terminal.c
+endif
+
+ifeq ($(CONFIG_NET),y)
+SRCS += \
+       kernel/drivers/net/pci.c \
+       kernel/drivers/net/virtio_net.c \
+       kernel/net/net.c
+endif
+
+ifeq ($(CONFIG_VFS),y)
+SRCS += \
+       kernel/fs/vfs.c \
+       kernel/fs/ramfs.c
+endif
+
+ifeq ($(CONFIG_SHELL),y)
+SRCS += kernel/shell/shell.c
+endif
+
+ifeq ($(CONFIG_USERSPACE),y)
+SRCS += \
+       kernel/user/syscall.c \
+       kernel/user/userspace.c
+endif
 
 # Convert source paths → build paths
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -44,12 +76,17 @@ KERNEL = kernel.elf
 
 all: iso
 
-# Compile C → build/...
-$(BUILD_DIR)/%.o: %.c
+$(CONFIG_HEADER): .config
+	@echo "#pragma once" > $(CONFIG_HEADER)
+	@echo "" >> $(CONFIG_HEADER)
+	@grep "=y" .config | sed 's/=y//' | while read line; do \
+		echo "#define $$line" >> $(CONFIG_HEADER); \
+	done
+
+$(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Assemble ASM → build/...
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
 	$(NASM) -f elf64 $< -o $@
@@ -75,6 +112,9 @@ iso: $(KERNEL)
 		boot/=iso/boot \
 		limine.conf=iso/limine.conf \
 		-o termuos.iso
+
+menuconfig:
+	python3 scripts/menuconfig.py
 
 run: iso
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
