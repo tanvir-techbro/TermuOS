@@ -5,4 +5,3 @@
 #define CONFIG_VFS
 #define CONFIG_SHELL
 #define CONFIG_USERSPACE
-#define CONFIG_PCI

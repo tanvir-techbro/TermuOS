@@ -1,9 +1,12 @@
 #include "syscall.h"
 #include "../arch/x86_64/gdt.h"
 #include "../drivers/video/terminal.h"
+#include "../sched/scheduler.h"
 #include "../fs/vfs.h"
 #include "../lib/printf.h"
 #include <stdint.h>
+
+extern volatile uint64_t timer_ticks;
 
 extern void syscall_entry(void);
 
@@ -76,6 +79,34 @@ static uint64_t sys_close(uint64_t fd)
     return (uint64_t)vfs_close((int)fd);
 }
 
+static uint64_t sys_getpid(void)
+{
+    return 1;
+}
+
+static uint64_t sys_sleep(uint64_t ticks)
+{
+    uint64_t target = timer_ticks + ticks;
+
+    while (timer_ticks < target)
+    {
+        __asm__ volatile("hlt");
+    }
+
+    return 0;
+}
+
+static uint64_t sys_uptime(void)
+{
+    return timer_ticks;
+}
+
+static uint64_t sys_yield(void)
+{
+    scheduler_yield();
+    return 0;
+}
+
 uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c)
 {
     switch (num)
@@ -90,6 +121,14 @@ uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c)
         return sys_open(a, b, c);
     case SYS_CLOSE:
         return sys_close(a);
+    case SYS_GETPID:
+        return sys_getpid();
+    case SYS_SLEEP:
+        return sys_sleep(a);
+    case SYS_UPTIME:
+        return sys_uptime();
+    case SYS_YIELD:
+        return sys_yield();
     default:
         kprintf("[kernel] unknown syscall %u\n", num);
         return (uint64_t)-1;
