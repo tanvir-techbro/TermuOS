@@ -7,7 +7,9 @@
 #include "../sched/scheduler.h"
 #include "../fs/vfs.h"
 #include "../net/net.h"
+#include "../user/syscall.h"
 #include "../lib/printf.h"
+#include "../lib/string.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
@@ -20,6 +22,33 @@
 #define USERNAME "root"
 
 static char cwd[VFS_PATH_MAX] = "/";
+
+static void uint_to_string(uint64_t value, char *buffer)
+{
+    char temp[32];
+    int i = 0;
+    int j = 0;
+
+    if (value == 0)
+    {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return;
+    }
+
+    while (value > 0)
+    {
+        temp[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    while (i > 0)
+    {
+        buffer[j++] = temp[--i];
+    }
+
+    buffer[j] = '\0';
+}
 
 static int sh_strlen(const char *s)
 {
@@ -152,7 +181,9 @@ static void cmd_help(int argc, char **argv)
     (void)argv;
     kprintf("Commands: help clear echo uname uptime mem threads\n");
     kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
+    #ifdef CONFIG_NET
     kprintf("          ifconfig ping arp\n");
+    #endif
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -184,8 +215,15 @@ static void cmd_uptime(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    uint64_t t = pit_ticks(), s = t / 100, m = s / 60, h = m / 60;
-    kprintf("up %u:%02u:%02u\n", h, m % 60, s % 60);
+    
+    uint64_t uptime = syscall_dispatch(SYS_UPTIME, 0, 0, 0);
+
+    char buf[32];
+    uint_to_string(uptime, buf);
+
+    kprintf("Uptime ticks: ");
+    kprintf(buf);
+    kprintf("\n");
 }
 
 static void cmd_mem(int argc, char **argv)
@@ -438,6 +476,48 @@ static void cmd_arp(int argc, char **argv)
 }
 #endif
 
+// ─── PID ─────────────────────────────────────────────────────────────────
+
+static void cmd_pid(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    uint64_t pid = syscall_dispatch(SYS_GETPID, 0, 0, 0);
+
+    kprintf("PID: ");
+
+    char buf[32];
+    uint_to_string(pid, buf);
+
+    kprintf(buf);
+    kprintf("\n");
+}
+
+static void cmd_sleep(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    kprintf("Sleeping...\n");
+
+    syscall_dispatch(SYS_SLEEP, 100, 0, 0);
+
+    kprintf("Awake!\n");
+}
+
+static void cmd_yield(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    kprintf("Yielding CPU...\n");
+
+    syscall_dispatch(SYS_YIELD, 0, 0, 0);
+
+    kprintf("Returned from yield\n");
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -467,7 +547,11 @@ static const command_t commands[] = {
     {"ping", cmd_ping}, 
     {"arp", cmd_arp},
     #endif
-    {NULL, NULL}};
+    {"pid", cmd_pid},
+    {"sleep", cmd_sleep},
+    {"yield", cmd_yield},
+    {NULL, NULL}
+};
 
 static void dispatch(char *line)
 {

@@ -7,7 +7,7 @@
 #define PIT_CMD 0x43
 #define PIT_BASE_HZ 1193182
 
-static volatile uint64_t ticks = 0;
+volatile uint64_t timer_ticks = 0;
 
 static inline void outb(uint16_t port, uint8_t val)
 {
@@ -17,7 +17,7 @@ static inline void outb(uint16_t port, uint8_t val)
 static void pit_irq(registers_t *r)
 {
     (void)r;
-    ticks++;
+    timer_ticks++;
     scheduler_tick(r); // give the scheduler a chance to switch
 }
 
@@ -33,4 +33,4 @@ void pit_init(uint32_t hz)
     idt_register_irq(0, pit_irq); // IRQ0 = timer
 }
 
-uint64_t pit_ticks(void) { return ticks; }
+uint64_t pit_ticks(void) { return timer_ticks; }
