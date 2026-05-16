@@ -4,6 +4,7 @@
 
 #include "drivers/video/fb.h"
 #include "drivers/video/terminal.h"
+#include "drivers/video/gfx.h"
 #include "drivers/input/keyboard.h"
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/gdt.h"
@@ -84,15 +85,14 @@ void kernel_main(void)
     scheduler_init();
     pit_init(100);
 
-    #ifdef CONFIG_NET
+#ifdef CONFIG_NET
     pci_init();
     virtio_net_init();
-    #endif
+#endif
 
     terminal_init();
     terminal_set_size(fb->width, fb->height);
     terminal_set_bg(0x0d, 0x0d, 0x0d);
     terminal_set_fg(0x00, 0xff, 0x88);
-    kprintf("Returned to shell.\n");
     shell_run();
 }
