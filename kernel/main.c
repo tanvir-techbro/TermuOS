@@ -96,17 +96,5 @@ void kernel_main(void)
     terminal_set_size(fb->width, fb->height);
     terminal_set_bg(0x0d, 0x0d, 0x0d);
     terminal_set_fg(0x00, 0xff, 0x88);
-
-    window_t win = {
-        .x = 100, .y = 100, .w = 400, .h = 300,
-        .title = "My First Window",
-        .bg = fb_colour(20, 20, 30),
-        .border = fb_colour(100, 100, 200),
-        .title_bg = fb_colour(50, 50, 150),
-        .title_fg = fb_colour(255, 255, 255),
-    };
-    win_draw(&win);
-    win_draw_string(&win, 1, 1, "Hello!", fb_colour(255,255,255));
-
     shell_run();
 }
