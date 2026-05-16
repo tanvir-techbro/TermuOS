@@ -68,9 +68,6 @@ int pci_find(uint16_t vendor, uint16_t device, pci_device_t *out)
                 // Read IRQ
                 out->irq = pci_read(bus, slot, 0, 0x3c) & 0xff;
 
-                kprintf("PCI: found %04x:%04x at %d:%d irq=%d\n",
-                        vendor, device, bus, slot, out->irq);
-                kprintf("PCI: BAR0=0x%x BAR1=0x%x\n", out->bar[0], out->bar[1]);
                 return 0;
             }
         }
@@ -80,5 +77,4 @@ int pci_find(uint16_t vendor, uint16_t device, pci_device_t *out)
 
 void pci_init(void)
 {
-    kprintf("PCI: scanning bus...\n");
 }

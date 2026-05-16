@@ -71,7 +71,6 @@ void pmm_init(struct limine_memmap_response *memmap)
 
     if (!bitmap)
     {
-        kprintf("PMM: FATAL: no region large enough for bitmap!\n");
         for (;;)
             __asm__ volatile("hlt");
     }
@@ -108,10 +107,6 @@ void pmm_init(struct limine_memmap_response *memmap)
             free_pages--;
         }
     }
-
-    kprintf("PMM: bitmap at 0x%x (%u bytes)\n", (uint64_t)bitmap, bm_bytes);
-    kprintf("PMM: %u MB usable (%u pages free)\n",
-            (free_pages * PAGE_SIZE) / (1024 * 1024), free_pages);
 }
 
 // ─── Alloc / Free ────────────────────────────────────────────────────────────

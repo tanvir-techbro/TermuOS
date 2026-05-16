@@ -129,7 +129,6 @@ static int init_queue(uint16_t idx, virtq_t *q, vring_mem_t *mem)
 {
     outw(io_base + VIRTIO_PCI_QUEUE_SEL, idx);
     uint16_t size = inw(io_base + VIRTIO_PCI_QUEUE_SIZE);
-    kprintf("virtio-net: queue %u hw_size=%u, using %u\n", idx, size, QUEUE_SIZE);
     if (!size) return -1;
 
     // Zero the memory
@@ -149,10 +148,8 @@ static int init_queue(uint16_t idx, virtq_t *q, vring_mem_t *mem)
 
     // Get physical address of the descriptor table (must be 4096-aligned)
     uint64_t phys = kvirt_to_phys(mem);
-    kprintf("virtio-net: queue %u phys=0x%x\n", idx, phys);
-
+    
     if (phys & 0xfff) {
-        kprintf("virtio-net: queue memory not page-aligned!\n");
         return -1;
     }
 
@@ -291,12 +288,10 @@ int virtio_net_init(void)
 {
     pci_device_t dev;
     if (pci_find(PCI_VENDOR_VIRTIO, PCI_DEVICE_NET, &dev) < 0) {
-        kprintf("virtio-net: not found\n");
         return -1;
     }
 
     io_base = dev.bar[0] & ~0x3u;
-    kprintf("virtio-net: io_base=0x%x irq=%u\n", io_base, dev.irq);
     pci_enable_busmaster(&dev);
 
     // Reset + init sequence
@@ -308,15 +303,13 @@ int virtio_net_init(void)
     uint32_t host_feat = 0;
     // Read 4 bytes properly
     __asm__ volatile("inl %1,%0":"=a"(host_feat):"Nd"((uint16_t)(io_base + VIRTIO_PCI_HOST_FEATURES)));
-    kprintf("virtio-net: host features=0x%x\n", host_feat);
     uint32_t our_feat = host_feat & VIRTIO_NET_F_MAC;
     __asm__ volatile("outl %0,%1"::"a"(our_feat),"Nd"((uint16_t)(io_base + VIRTIO_PCI_GUEST_FEATURES)));
 
     // Read MAC
     for (int i = 0; i < 6; i++)
         netif.mac.b[i] = inb(io_base + VIRTIO_PCI_CONFIG + i);
-    kprintf("virtio-net: MAC " MAC_FMT "\n", MAC_ARGS(netif.mac));
-
+    
     // Setup queues
     if (init_queue(0, &rxq, &rxq_mem) < 0) return -1;
     if (init_queue(1, &txq, &txq_mem) < 0) return -1;
@@ -338,6 +331,5 @@ int virtio_net_init(void)
     netif.send = virtio_send;
 
     net_init();
-    kprintf("virtio-net: ready.\n");
     return 0;
 }

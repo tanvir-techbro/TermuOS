@@ -42,7 +42,6 @@ void keyboard_init(void)
 {
     while (inb(KBD_STATUS) & 0x01)
         inb(KBD_DATA);
-    kprintf("Keyboard: ready.\n");
 }
 
 int keyboard_haschar(void) 

@@ -124,24 +124,17 @@ void gdt_init(void)
 
     set_tss_entry(&gdt.tss, (uint64_t)&tss, sizeof(tss) - 1);
 
-    kprintf("GDT: gdt at 0x%x, sizeof=%u\n", (uint64_t)&gdt, sizeof(gdt));
-    kprintf("GDT: tss var at 0x%x, sizeof=%u\n", (uint64_t)&tss, sizeof(tss));
-
     // Load GDTR
     gdtr.limit = sizeof(gdt) - 1;
     gdtr.base = (uint64_t)&gdt;
 
     gdt_flush((uint64_t)&gdtr, GDT_KERNEL_CODE, GDT_KERNEL_DATA);
     tss_flush(GDT_TSS_LOW);
-
-    kprintf("GDT: loaded (%u entries, TSS at 0x%x)\n",
-            sizeof(gdt) / sizeof(gdt_entry_t), (uint64_t)&tss);
 }
 
 void tss_set_kernel_stack(uint64_t rsp)
 {
     tss.rsp[0] = rsp;
-    kprintf("GDT: TSS RSP0 set to 0x%x\n", rsp);
 }
 
 // Dedicated exception stack — used as RSP0 in TSS

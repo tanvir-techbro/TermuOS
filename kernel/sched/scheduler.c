@@ -22,7 +22,6 @@ void scheduler_init(void)
 
     current = 0;
     initialized = 1;
-    kprintf("Scheduler: init.\n");
 }
 
 thread_t *thread_create(const char *name, void (*entry)(void))

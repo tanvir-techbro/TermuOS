@@ -77,8 +77,8 @@ void kernel_main(void)
     int fd = vfs_open("/etc/motd", O_WRONLY | O_CREAT);
     if (fd >= 0)
     {
-        const char *motd = "snoop dog bob steve gary albert bryan dave\n";
-        vfs_write(fd, motd, 44);
+        const char *motd = "Welcome to TermuOS\n";
+        vfs_write(fd, motd, 19);
         vfs_close(fd);
     }
 

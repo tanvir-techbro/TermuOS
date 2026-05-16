@@ -47,9 +47,6 @@ void heap_init(void)
     heap_head->size = PAGE_SIZE - HEADER_SIZE;
     heap_head->free = 1;
     heap_head->next = NULL;
-
-    kprintf("Heap: start 0x%x, initial size %u bytes\n",
-            HEAP_START, PAGE_SIZE - HEADER_SIZE);
 }
 
 void *kmalloc(size_t size)

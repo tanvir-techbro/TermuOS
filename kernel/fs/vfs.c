@@ -71,7 +71,6 @@ void vfs_init(void)
         mounts[i].used = 0;
     for (int i = 0; i < VFS_MAX_FDS; i++)
         fds[i].used = 0;
-    kprintf("VFS: initialised.\n");
 }
 
 int vfs_mount(const char *path, vfs_node_t *root)
@@ -83,7 +82,6 @@ int vfs_mount(const char *path, vfs_node_t *root)
             vfs_strcpy(mounts[i].path, path, VFS_PATH_MAX);
             mounts[i].root = root;
             mounts[i].used = 1;
-            kprintf("VFS: mounted '%s' at %s\n", root->name, path);
             return 0;
         }
     }

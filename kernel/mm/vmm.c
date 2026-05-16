@@ -45,12 +45,9 @@ static uint64_t *get_or_create_entry(uint64_t *table, int idx, uint64_t flags)
 void vmm_init(uint64_t hhdm, pagemap_t kernel_pml4)
 {
     hhdm_base = hhdm;
-    kprintf("VMM: HHDM base at 0x%x\n", hhdm_base);
-    kprintf("VMM: kernel PML4 at 0x%x\n", kernel_pml4);
 
     // switch to limine page map (already active, but confirms)
     vmm_switch(kernel_pml4);
-    kprintf("VMM: initialised.\n");
 }
 
 pagemap_t vmm_new_pagemap(void)
