@@ -34,12 +34,11 @@ SRCS += \
        kernel/drivers/input/keyboard.c \
        kernel/sched/scheduler.c
 
-ifeq ($(CONFIG_FB),y)
 SRCS += \
        kernel/drivers/video/fb.c \
 	   kernel/drivers/video/gfx.c \
-       kernel/drivers/video/terminal.c
-endif
+       kernel/drivers/video/terminal.c \
+	   kernel/gui/window.c
 
 ifeq ($(CONFIG_NET),y)
 SRCS += \

@@ -4,12 +4,6 @@ import curses
 CONFIG_FILE = ".config"
 
 options = {
-    "CONFIG_FB": {
-        "enabled": "y",
-        "title": "Framebuffer Support",
-        "help": "Enables framebuffer graphics and terminal rendering."
-    },
-
     "CONFIG_NET": {
         "enabled": "y",
         "title": "Networking",
