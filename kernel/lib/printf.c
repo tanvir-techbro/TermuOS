@@ -3,6 +3,13 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+static void (*_putchar_fn)(char) = terminal_putchar;
+
+void kprintf_set_output(void (*putchar_fn)(char))
+{
+    _putchar_fn = putchar_fn ? putchar_fn : terminal_putchar;
+}
+
 static void print_uint(uint64_t n, int base)
 {
     static const char digits[] = "0123456789abcdef";
@@ -10,7 +17,7 @@ static void print_uint(uint64_t n, int base)
     int i = 0;
     if (n == 0)
     {
-        terminal_putchar('0');
+        _putchar_fn('0');
         return;
     }
     while (n)
@@ -19,36 +26,38 @@ static void print_uint(uint64_t n, int base)
         n /= base;
     }
     while (i--)
-        terminal_putchar(buf[i]);
+        _putchar_fn(buf[i]);
 }
 
 void kprintf(const char *fmt, ...)
 {
     va_list args;
+    const char *s;
     va_start(args, fmt);
 
     for (; *fmt; fmt++)
     {
         if (*fmt != '%')
         {
-            terminal_putchar(*fmt);
+            _putchar_fn(*fmt);
             continue;
         }
         fmt++;
         switch (*fmt)
         {
         case 'c':
-            terminal_putchar((char)va_arg(args, int));
+            _putchar_fn((char)va_arg(args, int));
             break;
         case 's':
-            terminal_puts(va_arg(args, const char *));
+            s = va_arg(args, const char *);
+            while (s && *s) _putchar_fn(*s++);
             break;
         case 'd':
         {
             int64_t n = va_arg(args, int64_t);
             if (n < 0)
             {
-                terminal_putchar('-');
+                _putchar_fn('-');
                 n = -n;
             }
             print_uint((uint64_t)n, 10);
@@ -61,14 +70,14 @@ void kprintf(const char *fmt, ...)
             print_uint(va_arg(args, uint64_t), 16);
             break;
         case 'p':
-            terminal_puts("0x");
+            _putchar_fn('0'); _putchar_fn('x');
             print_uint((uint64_t)va_arg(args, void *), 16);
             break;
         case '%':
-            terminal_putchar('%');
+            _putchar_fn('%');
             break;
         default:
-            terminal_putchar('?');
+            _putchar_fn('?');
             break;
         }
     }

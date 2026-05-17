@@ -20,7 +20,8 @@
 #include "shell/shell.h"
 #include "lib/printf.h"
 
-#include "gui/window.h"
+#include "gui/desktop.h"
+#include "gui/term_app.h"
 
 #include "config.h"
 
@@ -92,9 +93,8 @@ void kernel_main(void)
     virtio_net_init();
 #endif
 
-    terminal_init();
-    terminal_set_size(fb->width, fb->height);
-    terminal_set_bg(0x0d, 0x0d, 0x0d);
-    terminal_set_fg(0x00, 0xff, 0x88);
-    shell_run();
+    desktop_init(fb_colour(15,15,25));
+    desktop_add_app(term_app_get());
+    term_app_launch(); // auto-open terminal on boot
+    desktop_run();
 }

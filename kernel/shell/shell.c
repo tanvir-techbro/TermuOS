@@ -344,9 +344,10 @@ static void cmd_cat(int argc, char **argv)
     while ((n = vfs_read(fd, buf, sizeof(buf) - 1)) > 0)
     {
         buf[n] = 0;
-        terminal_puts((char *)buf);
+        for (int i = 0; i < n; i++)
+            kprintf("%c", buf[i]); // char by char instead of %s
     }
-    terminal_putchar('\n');
+    kprintf("\n");
     vfs_close(fd);
 }
 
@@ -590,4 +591,13 @@ void shell_run(void)
         readline(input, INPUT_MAX);
         dispatch(input);
     }
+}
+
+void shell_run_command(const char *line)
+{
+    static char buf[INPUT_MAX];
+    int i = 0;
+    while (line[i] && i < INPUT_MAX - 1) { buf[i] = line[i]; i++; }
+    buf[i] = '\0';
+    dispatch(buf);
 }

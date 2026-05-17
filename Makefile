@@ -38,7 +38,11 @@ SRCS += \
        kernel/drivers/video/fb.c \
 	   kernel/drivers/video/gfx.c \
        kernel/drivers/video/terminal.c \
-	   kernel/gui/window.c
+	   kernel/gui/window.c \
+	   kernel/gui/ui.c \
+	   kernel/gui/term_app.c \
+	   kernel/gui/desktop.c \
+	   kernel/gui/bitmap.c
 
 ifeq ($(CONFIG_NET),y)
 SRCS += \
@@ -70,7 +74,8 @@ OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
        $(BUILD_DIR)/kernel/sched/context_switch.o \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
-       $(BUILD_DIR)/kernel/user/userspace_asm.o
+       $(BUILD_DIR)/kernel/user/userspace_asm.o \
+	   $(BUILD_DIR)/assets/bg_stars.o
 
 KERNEL = kernel.elf
 
@@ -82,6 +87,10 @@ $(CONFIG_HEADER): .config
 	@grep "=y" .config | sed 's/=y//' | while read line; do \
 		echo "#define $$line" >> $(CONFIG_HEADER); \
 	done
+
+$(BUILD_DIR)/assets/bg_stars.o: assets/bg_stars.bmp
+	@mkdir -p $(BUILD_DIR)/assets
+	x86_64-linux-gnu-objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
 
 $(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
 	@mkdir -p $(dir $@)
@@ -116,9 +125,21 @@ iso: $(KERNEL)
 menuconfig:
 	python3 scripts/menuconfig.py
 
+mkbmp:
+	python3 scripts/mkbmp.py
+
+mkbmp-grad:
+	python3 scripts/mkbmp.py bg gradient
+
+mkbmp-term:
+	python3 scripts/mkbmp.py icon terminal
+
 run: iso
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
 		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
+
+clean-assets:
+	rm -rf assets
 
 clean:
 	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/
