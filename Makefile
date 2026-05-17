@@ -19,7 +19,8 @@ SRCS += \
        kernel/arch/x86_64/gdt.c \
        kernel/arch/x86_64/idt.c \
        kernel/arch/x86_64/pic.c \
-       kernel/arch/x86_64/pit.c
+       kernel/arch/x86_64/pit.c \
+	   kernel/drivers/rtc/rtc.c
 
 SRCS += \
        kernel/mm/pmm.c \

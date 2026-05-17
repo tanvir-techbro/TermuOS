@@ -4,6 +4,8 @@
 #include "../drivers/video/fb.h"
 #include "../drivers/video/gfx.h"
 #include "../drivers/input/keyboard.h"
+#include "../drivers/rtc/rtc.h"
+#include "../arch/x86_64/pit.h"
 #include "../mm/heap.h"
 #include <stddef.h>
 
@@ -52,6 +54,29 @@ static void draw_taskbar(void)
 
     gfx_fill_rect(0, ty, sw, DESKTOP_TASKBAR_H, fb_colour(22, 22, 32));
     gfx_draw_hline(0, ty, sw, fb_colour(60, 60, 100));
+
+    // Clock on the right
+    {
+        rtc_time_t t;
+        rtc_read(&t);
+
+        // Format HH:MM:SS
+        char clock[9];
+        clock[0] = '0' + t.hour / 10;
+        clock[1] = '0' + t.hour % 10;
+        clock[2] = ':';
+        clock[3] = '0' + t.minute / 10;
+        clock[4] = '0' + t.minute % 10;
+        clock[5] = ':';
+        clock[6] = '0' + t.second / 10;
+        clock[7] = '0' + t.second % 10;
+        clock[8] = '\0';
+
+        int cw = 8 * GFX_FONT_W; // "HH:MM:SS" = 8 chars
+        int cx = sw - cw - DESKTOP_ICON_PAD;
+        int cy = ty + (DESKTOP_TASKBAR_H - GFX_FONT_H) / 2;
+        gfx_draw_string(cx, cy, clock, fb_colour(200, 200, 220), fb_colour(22, 22, 32));
+    }
 
     int ix = DESKTOP_ICON_PAD;
     for (int i = 0; i < _app_count; i++)
@@ -185,8 +210,17 @@ void desktop_run(void)
 {
     desktop_redraw();
 
+    uint32_t last_second = 0;
+
     for (;;)
     {
+        uint32_t now = (uint32_t)(pit_ticks() / 100);
+        if (now != last_second)
+        {
+            last_second = now;
+            draw_taskbar();
+        }
+
         if (!keyboard_haschar()) continue;
         char c = keyboard_getchar();
 
@@ -195,3 +229,4 @@ void desktop_run(void)
                 _windows[_focused].on_key(&_windows[_focused], c);
     }
 }
+
