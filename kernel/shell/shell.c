@@ -23,6 +23,11 @@
 
 static char cwd[VFS_PATH_MAX] = "/";
 
+const char *shell_get_cwd(void)
+{
+    return cwd;
+}
+
 static void uint_to_string(uint64_t value, char *buffer)
 {
     char temp[32];

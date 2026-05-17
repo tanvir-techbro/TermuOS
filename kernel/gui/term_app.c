@@ -179,8 +179,9 @@ static void term_key(desk_window_t *dw, char c)
 
 static void term_app_print_prompt(void)
 {
-    const char *prompt = "root@TermuOS:/# ";
-    term_app_puts(prompt);
+    term_app_puts("root@TermuOS:");
+    term_app_puts(shell_get_cwd());
+    term_app_puts("# ");
 }
 
 void term_app_launch(void)
