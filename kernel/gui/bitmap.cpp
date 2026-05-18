@@ -1,5 +1,7 @@
 #include "bitmap.hpp"
+extern "C" {
 #include "../drivers/video/fb.h"
+}
 #include <stdint.h>
 
 namespace Bitmap

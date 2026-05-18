@@ -195,7 +195,7 @@ static void cmd_clear(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    terminal_set_bg(0, 0, 0);
+    kprintf("%c", '\014');
 }
 
 static void cmd_echo(int argc, char **argv)

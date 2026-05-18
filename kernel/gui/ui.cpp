@@ -1,7 +1,9 @@
 #include "ui.hpp"
 #include "window.hpp"
+extern "C" {
 #include "../drivers/video/gfx.h"
 #include "../drivers/video/fb.h"
+}
 
 // Theme
 

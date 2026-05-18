@@ -19,7 +19,6 @@ CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
 CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti -fno-use-cxa-atexit -std=c++17
 
 SRCS += \
-       kernel/main.c \
        kernel/arch/x86_64/gdt.c \
        kernel/arch/x86_64/idt.c \
        kernel/arch/x86_64/pic.c \
@@ -37,6 +36,7 @@ SRCS += \
 
 SRCS += \
        kernel/drivers/input/keyboard.c \
+       kernel/drivers/input/mouse.c \
        kernel/sched/scheduler.c
 
 SRCS += \
@@ -45,6 +45,7 @@ SRCS += \
        kernel/drivers/video/terminal.c
 
 CPPSRCS += \
+       kernel/main.cpp \
        kernel/gui/new.cpp \
        kernel/gui/bitmap.cpp \
        kernel/gui/window.cpp \

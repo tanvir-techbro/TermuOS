@@ -2,10 +2,12 @@
 #include <stddef.h>
 #include <limine.h>
 
+extern "C" {
 #include "drivers/video/fb.h"
 #include "drivers/video/terminal.h"
 #include "drivers/video/gfx.h"
 #include "drivers/input/keyboard.h"
+#include "drivers/input/mouse.h"
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/gdt.h"
 #include "arch/x86_64/pit.h"
@@ -19,18 +21,21 @@
 #include "drivers/net/virtio_net.h"
 #include "shell/shell.h"
 #include "lib/printf.h"
+}
 
-#include "gui/desktop.h"
-#include "gui/term_app.h"
+#include "gui/desktop.hpp"
+#include "gui/term_app.hpp"
 
 #include "config.h"
+
+inline void *operator new(size_t, void *ptr) noexcept { return ptr; }
 
 LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests_start"))) static volatile LIMINE_REQUESTS_START_MARKER
 
-    __attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request fb_request = {
-        .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0};
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request fb_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_memmap_request memmap_request = {
     .id = LIMINE_MEMMAP_REQUEST, .revision = 0};
@@ -43,25 +48,25 @@ __attribute__((used, section(".limine_requests"))) static volatile struct limine
 
 __attribute__((used, section(".limine_requests_end"))) static volatile LIMINE_REQUESTS_END_MARKER
 
-    static uint64_t
-    read_cr3(void)
+static uint64_t read_cr3(void)
 {
     uint64_t cr3;
     __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
     return cr3;
 }
 
-void kernel_main(void)
+// Storage for TerminalApp — constructed manually after heap_init
+static uint8_t term_app_storage[sizeof(TerminalApp)] __attribute__((aligned(16)));
+static TerminalApp *term_app = nullptr;
+
+extern "C" void kernel_main(void)
 {
     if (!fb_request.response || fb_request.response->framebuffer_count < 1)
-        for (;;)
-            __asm__ volatile("hlt");
+        for (;;) __asm__ volatile("hlt");
 
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
-
-    // Init subsystems silently
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
     idt_init(GDT_KERNEL_CODE);
@@ -87,14 +92,19 @@ void kernel_main(void)
 
     scheduler_init();
     pit_init(100);
+    mouse_init();
 
 #ifdef CONFIG_NET
     pci_init();
     virtio_net_init();
 #endif
 
-    desktop_init(fb_colour(15,15,25));
-    desktop_add_app(term_app_get());
-    term_app_launch(); // auto-open terminal on boot
-    desktop_run();
+    // Construct TerminalApp in-place after all subsystems are ready
+    term_app = new (term_app_storage) TerminalApp();
+
+    Desktop::instance().init(fb_colour(10, 10, 20));
+    mouse_set_screen(fb->width, fb->height);
+    Desktop::instance().add_app(term_app);
+    term_app->launch();
+    Desktop::instance().run();
 }

@@ -5,9 +5,11 @@
 
 static void (*_putchar_fn)(char) = terminal_putchar;
 
+static void null_putchar(char c) { (void)c; }
+
 void kprintf_set_output(void (*putchar_fn)(char))
 {
-    _putchar_fn = putchar_fn ? putchar_fn : terminal_putchar;
+    _putchar_fn = putchar_fn ? putchar_fn : null_putchar;
 }
 
 static void print_uint(uint64_t n, int base)

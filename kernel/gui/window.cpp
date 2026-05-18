@@ -1,6 +1,8 @@
 #include "window.hpp"
+extern "C" {
 #include "../drivers/video/gfx.h"
 #include "../drivers/video/fb.h"
+}
 
 Window::Window(const char *title, int x, int y, int w, int h,
                uint32_t bg, uint32_t border, uint32_t title_bg, uint32_t title_fg)
