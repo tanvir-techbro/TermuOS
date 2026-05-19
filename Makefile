@@ -1,4 +1,5 @@
 CC   = clang
+CXX  = clang++
 LD   = ld.lld
 NASM = nasm
 
@@ -9,18 +10,20 @@ CONFIG_HEADER = kernel/config.h
 include .config
 
 SRCS :=
+CPPSRCS :=
 
 CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
          -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel \
          -O2 -Wall -Wextra -Ikernel -Ilimine
 
+CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti -fno-use-cxa-atexit -std=c++17
+
 SRCS += \
-       kernel/main.c \
        kernel/arch/x86_64/gdt.c \
        kernel/arch/x86_64/idt.c \
        kernel/arch/x86_64/pic.c \
        kernel/arch/x86_64/pit.c \
-	   kernel/drivers/rtc/rtc.c
+       kernel/drivers/rtc/rtc.c
 
 SRCS += \
        kernel/mm/pmm.c \
@@ -33,17 +36,24 @@ SRCS += \
 
 SRCS += \
        kernel/drivers/input/keyboard.c \
+       kernel/drivers/input/mouse.c \
        kernel/sched/scheduler.c
 
 SRCS += \
        kernel/drivers/video/fb.c \
-	   kernel/drivers/video/gfx.c \
-       kernel/drivers/video/terminal.c \
-	   kernel/gui/window.c \
-	   kernel/gui/ui.c \
-	   kernel/gui/term_app.c \
-	   kernel/gui/desktop.c \
-	   kernel/gui/bitmap.c
+       kernel/drivers/video/gfx.c \
+       kernel/drivers/video/terminal.c
+
+CPPSRCS += \
+       kernel/main.cpp \
+       kernel/gui/new.cpp \
+       kernel/gui/bitmap.cpp \
+       kernel/gui/window.cpp \
+       kernel/gui/widget.cpp \
+       kernel/gui/ui.cpp \
+       kernel/gui/desktop.cpp \
+       kernel/gui/term_app.cpp \
+	   kernel/gui/context_menu.cpp
 
 ifeq ($(CONFIG_NET),y)
 SRCS += \
@@ -68,15 +78,15 @@ SRCS += \
        kernel/user/userspace.c
 endif
 
-# Convert source paths → build paths
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPPSRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/entry.o \
        $(BUILD_DIR)/kernel/arch/x86_64/gdt_asm.o \
        $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
        $(BUILD_DIR)/kernel/sched/context_switch.o \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
        $(BUILD_DIR)/kernel/user/userspace_asm.o \
-	   $(BUILD_DIR)/assets/bg_stars.o
+       $(BUILD_DIR)/assets/bg_stars.o
 
 KERNEL = kernel.elf
 
@@ -96,6 +106,10 @@ $(BUILD_DIR)/assets/bg_stars.o: assets/bg_stars.bmp
 $(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.cpp $(CONFIG_HEADER)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
