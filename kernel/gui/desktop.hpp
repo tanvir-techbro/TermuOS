@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "window.hpp"
+#include "context_menu.hpp"
 
 #define DESKTOP_MAX_WINDOWS  16
 #define DESKTOP_MAX_APPS     16
@@ -52,10 +53,16 @@ private:
     void draw_taskbar();
     void draw_windows();
 
+    void handle_right_click(int mx, int my);
+
     uint32_t  _bg_colour  = 0;
     bool      _bg_loaded  = false;
     App      *_apps[DESKTOP_MAX_APPS]       = {};
     int       _app_count  = 0;
     Window   *_windows[DESKTOP_MAX_WINDOWS] = {};
     int       _focused    = -1;
+    int       _hover_app  = -1;
+
+    ContextMenu _context_menu;
+    int         _context_app = -1; // which app was right clicked
 };

@@ -52,7 +52,8 @@ CPPSRCS += \
        kernel/gui/widget.cpp \
        kernel/gui/ui.cpp \
        kernel/gui/desktop.cpp \
-       kernel/gui/term_app.cpp
+       kernel/gui/term_app.cpp \
+	   kernel/gui/context_menu.cpp
 
 ifeq ($(CONFIG_NET),y)
 SRCS += \

@@ -195,6 +195,6 @@ void TerminalApp::launch()
 
     puts("TermuOS 0.1.0 -- type 'help' for commands.\n");
     print_prompt();
-    do_draw();
     desk.redraw();
+    do_draw();
 }

@@ -9,6 +9,9 @@ extern "C" {
 #include "../drivers/rtc/rtc.h"
 #include "../arch/x86_64/pit.h"
 }
+#include <stddef.h>
+
+inline void *operator new(size_t, void *ptr) noexcept { return ptr; }
 
 extern uint8_t _binary_assets_bg_stars_bmp_start[];
 
@@ -96,10 +99,14 @@ static void cursor_restore(void)
 
 // ─── Singleton ────────────────────────────────────────────────────────────────
 
+static uint8_t _desktop_storage[sizeof(Desktop)] __attribute__((aligned(16)));
+static Desktop *_desktop_ptr = nullptr;
+
 Desktop &Desktop::instance()
 {
-    static Desktop _instance;
-    return _instance;
+    if (!_desktop_ptr)
+        _desktop_ptr = new (_desktop_storage) Desktop();
+    return *_desktop_ptr;
 }
 
 // ─── Screen helpers ───────────────────────────────────────────────────────────
@@ -182,6 +189,15 @@ void Desktop::draw_taskbar()
     {
         int iy = ty + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
 
+        // Active indicator - blue underline if window open
+        bool is_active = false;
+        for (int j = 0; j < DESKTOP_MAX_WINDOWS; j++)
+            if (_windows[j] && _focused == j) { is_active = true; break; }
+
+        // Hover highlight
+        if (i == _hover_app)
+            gfx_fill_rect(ix - 4, ty + 2, APP_ICON_W + 8, DESKTOP_TASKBAR_H - 4, fb_colour(50, 50, 80));
+
         if (_apps[i]->icon_bmp)
         {
             Bitmap::draw(ix, iy, _apps[i]->icon_bmp, APP_ICON_W, APP_ICON_H);
@@ -202,6 +218,11 @@ void Desktop::draw_taskbar()
                                 fb_colour(60, 80, 160));
             }
         }
+
+        // Active underline
+        if (is_active)
+            gfx_fill_rect(ix - 2, ty + DESKTOP_TASKBAR_H - 4, APP_ICON_W + 4, 3, fb_colour(80, 120, 255));
+
         ix += APP_ICON_W + DESKTOP_ICON_PAD;
     }
 
@@ -260,7 +281,15 @@ void Desktop::handle_click(int mx, int my)
             if (mx >= ix && mx < ix + APP_ICON_W &&
                 my >= iy && my < iy + APP_ICON_H)
             {
-                _apps[i]->launch();
+                // Toggle - if already open and focused, close it
+                if (_focused >= 0 && _windows[_focused])
+                {
+                    close_window(_focused);
+                }
+                else
+                {
+                    _apps[i]->launch();
+                }
                 return;
             }
             ix += APP_ICON_W + DESKTOP_ICON_PAD;
@@ -292,6 +321,35 @@ void Desktop::handle_click(int mx, int my)
     }
 }
 
+void Desktop::handle_right_click(int mx, int my)
+{
+    if (my >= taskbar_y())
+    {
+        int ix = DESKTOP_ICON_PAD;
+        for (int i = 0; i < _app_count; i++)
+        {
+            int iy = taskbar_y() + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
+            if (mx >= ix && mx < ix + APP_ICON_W &&
+                my >= iy && my < iy + APP_ICON_H)
+            {
+                _context_app = i;
+                _context_menu = ContextMenu();
+                _context_menu.add_item("Launch", [](void *){
+                    Desktop::instance()._apps[Desktop::instance()._context_app]->launch();
+                }, nullptr);
+                _context_menu.add_separator();
+                _context_menu.add_item("Close Window", [](void *){
+                    Desktop &desk = Desktop::instance();
+                    if (desk._focused >= 0) desk.close_window(desk._focused);
+                }, nullptr);
+                _context_menu.show(mx, my - _context_menu.menu_h() - 4);
+                return;
+            }
+            ix += APP_ICON_W + DESKTOP_ICON_PAD;
+        }
+    }
+}
+
 // ─── Run loop ─────────────────────────────────────────────────────────────────
 
 void Desktop::run()
@@ -299,8 +357,8 @@ void Desktop::run()
     redraw();
 
     uint32_t last_second = 0;
-    int last_mx = -1, last_my = -1;
     int last_left = 0;
+    int last_right = 0;
 
     for (;;)
     {
@@ -320,18 +378,51 @@ void Desktop::run()
         if (mouse_moved())
         {
             mouse_state_t ms = mouse_get();
-
             cursor_restore();
+
+            // Hover detection
+            int new_hover = -1;
+            if (ms.y >= taskbar_y())
+            {
+                int ix = DESKTOP_ICON_PAD;
+                for (int i = 0; i < _app_count; i++)
+                {
+                    if (ms.x >= ix && ms.x < ix + APP_ICON_W)
+                        { new_hover = i; break; }
+                    ix += APP_ICON_W + DESKTOP_ICON_PAD;
+                }
+            }
+            if (new_hover != _hover_app)
+            {
+                _hover_app = new_hover;
+                draw_taskbar();
+            }
+
             cursor_save(ms.x, ms.y);
+
+            // Draw context menu on top of cursor save
+            if (_context_menu.visible()) _context_menu.draw();
+
             draw_cursor(ms.x, ms.y);
 
-            // Left click (rising edge)
             if (ms.left && !last_left)
-                handle_click(ms.x, ms.y);
+            {
+                if (_context_menu.visible())
+                {
+                    if (!_context_menu.on_click(ms.x, ms.y))
+                    {
+                        _context_menu.on_click_outside(ms.x, ms.y);
+                        redraw();
+                    }
+                }
+                else handle_click(ms.x, ms.y);
+            }
+
+            if (ms.right && !last_right)
+                handle_right_click(ms.x, ms.y);
 
             last_left = ms.left;
-            last_mx = ms.x;
-            last_my = ms.y;
+            last_right = ms.right;
         }
 
         // Keyboard
