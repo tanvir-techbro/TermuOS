@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 #include "window.hpp"
+#include "launcher.hpp"
+#include "../../assets/icon_logo.h"
 #include "context_menu.hpp"
 
 #define DESKTOP_MAX_WINDOWS  16
@@ -65,4 +67,11 @@ private:
 
     ContextMenu _context_menu;
     int         _context_app = -1; // which app was right clicked
+
+    Launcher _launcher;
+    bool     _launcher_open = false;
+
+    static constexpr int LOGO_X = 8;
+    static constexpr int LOGO_W = 32;
+    static constexpr int LOGO_H = 32;
 };
