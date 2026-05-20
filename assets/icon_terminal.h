@@ -1,5 +1,5 @@
 // Auto-generated from icon_terminal.bmp
-// Include in your kernel and pass to bmp_draw()
+// Pass to: bmp_draw(x, y, icon_terminal_bmp, 32, 32)
 
 #pragma once
 #include <stdint.h>

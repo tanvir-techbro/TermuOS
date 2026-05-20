@@ -129,6 +129,7 @@ void Desktop::init(uint32_t bg_colour)
     for (int i = 0; i < DESKTOP_MAX_APPS;    i++) _apps[i]    = nullptr;
 
     Theme::set_default();
+    _launcher.set_apps(_apps, _app_count);
 }
 
 // ─── Apps ─────────────────────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ void Desktop::draw_background()
 
 void Desktop::draw_taskbar()
 {
+    _launcher.set_apps(_apps, _app_count);
     int ty = taskbar_y();
     int sw = screen_w();
 
@@ -190,12 +192,22 @@ void Desktop::draw_taskbar()
 
     // ── Centered icons ──
     // Calculate total width of all icons to center them
-    int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+    int total_w = LOGO_W + DESKTOP_ICON_PAD + _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
     int start_x = (sw - total_w) / 2;
+
+    // Logo
+    int logo_y = ty + (DESKTOP_TASKBAR_H - LOGO_H) / 2;
+    if (_launcher_open)
+        gfx_fill_rect(start_x - 4, ty + 4, LOGO_W + 8, DESKTOP_TASKBAR_H - 8,
+                      fb_colour(40, 40, 80));
+    Bitmap::draw(start_x, logo_y, icon_logo_bmp, LOGO_W, LOGO_H);
+
+    // Apps start after logo
+    int icons_start = start_x + LOGO_W + DESKTOP_ICON_PAD;
 
     for (int i = 0; i < _app_count; i++)
     {
-        int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
+        int ix = icons_start + i * (APP_ICON_W + DESKTOP_ICON_PAD);
         int iy = ty + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
 
         bool is_active = (_focused >= 0 && _windows[_focused] != nullptr);
@@ -299,6 +311,7 @@ void Desktop::redraw()
     draw_background();
     draw_windows();
     draw_taskbar();
+    if (_launcher_open) _launcher.draw();
 }
 
 // ─── Click handling ───────────────────────────────────────────────────────────
@@ -308,11 +321,28 @@ void Desktop::handle_click(int mx, int my)
     // Check taskbar icons
     if (my >= taskbar_y())
     {
-        int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+        int total_w = LOGO_W + DESKTOP_ICON_PAD + _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
         int start_x = (screen_w() - total_w) / 2;
+        int icons_start = start_x + LOGO_W + DESKTOP_ICON_PAD;
+
+        int logo_y = taskbar_y() + (DESKTOP_TASKBAR_H - LOGO_H) / 2;
+        if (mx >= start_x && mx < start_x + LOGO_W &&
+            my >= logo_y && my < logo_y + LOGO_H)
+        {
+            _launcher_open = !_launcher_open;
+            if (_launcher_open)
+                _launcher.show(screen_w(), screen_h(), taskbar_y());
+            else
+            {
+                _launcher.hide();
+                redraw();
+            }
+            return;
+        }
+        
         for (int i = 0; i < _app_count; i++)
         {
-            int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
+            int ix = icons_start + i * (APP_ICON_W + DESKTOP_ICON_PAD);
             int iy = taskbar_y() + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
             if (mx >= ix && mx < ix + APP_ICON_W &&
                 my >= iy && my < iy + APP_ICON_H)
@@ -355,11 +385,15 @@ void Desktop::handle_right_click(int mx, int my)
 {
     if (my >= taskbar_y())
     {
-        int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+        int total_w = LOGO_W + DESKTOP_ICON_PAD + _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
         int start_x = (screen_w() - total_w) / 2;
+        int icons_start = start_x + LOGO_W + DESKTOP_ICON_PAD;
+
+        int logo_y = taskbar_y() + (DESKTOP_TASKBAR_H - LOGO_H) / 2;
+        
         for (int i = 0; i < _app_count; i++)
         {
-            int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
+            int ix = icons_start + i * (APP_ICON_W + DESKTOP_ICON_PAD);
             int iy = taskbar_y() + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
             if (mx >= ix && mx < ix + APP_ICON_W &&
                 my >= iy && my < iy + APP_ICON_H)
@@ -439,7 +473,13 @@ void Desktop::run()
 
             if (ms.left && !last_left)
             {
-                if (_context_menu.visible())
+                if (_launcher_open)
+                {
+                    bool consumed = _launcher.on_click(ms.x, ms.y);
+                    if (!consumed) _launcher_open = false;
+                    redraw();
+                }
+                else if (_context_menu.visible())
                 {
                     if (!_context_menu.on_click(ms.x, ms.y))
                     {
