@@ -393,7 +393,7 @@ void Desktop::run()
 
     for (;;)
     {
-        // Clock tick
+        // Clock tick.
         uint32_t now = (uint32_t)(pit_ticks() / 100);
         if (now != last_second)
         {
