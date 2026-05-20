@@ -5,8 +5,8 @@
 
 #define DESKTOP_MAX_WINDOWS  16
 #define DESKTOP_MAX_APPS     16
-#define DESKTOP_TASKBAR_H    48
-#define DESKTOP_ICON_PAD     8
+#define DESKTOP_TASKBAR_H    52
+#define DESKTOP_ICON_PAD     6
 #define APP_ICON_W           32
 #define APP_ICON_H           32
 

@@ -181,22 +181,41 @@ void Desktop::draw_taskbar()
     int ty = taskbar_y();
     int sw = screen_w();
 
-    gfx_fill_rect(0, ty, sw, DESKTOP_TASKBAR_H, fb_colour(22, 22, 32));
-    gfx_draw_hline(0, ty, sw, fb_colour(60, 60, 100));
+    // Bar background — dark with slight blue tint
+    gfx_fill_rect(0, ty, sw, DESKTOP_TASKBAR_H, fb_colour(15, 15, 25));
 
-    int ix = DESKTOP_ICON_PAD;
+    // Top glow line
+    gfx_draw_hline(0, ty, sw, fb_colour(50, 50, 90));
+    gfx_draw_hline(0, ty + 1, sw, fb_colour(30, 30, 55));
+
+    // ── Centered icons ──
+    // Calculate total width of all icons to center them
+    int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+    int start_x = (sw - total_w) / 2;
+
     for (int i = 0; i < _app_count; i++)
     {
+        int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
         int iy = ty + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
 
-        // Active indicator - blue underline if window open
-        bool is_active = false;
-        for (int j = 0; j < DESKTOP_MAX_WINDOWS; j++)
-            if (_windows[j] && _focused == j) { is_active = true; break; }
+        bool is_active = (_focused >= 0 && _windows[_focused] != nullptr);
 
-        // Hover highlight
-        if (i == _hover_app)
-            gfx_fill_rect(ix - 4, ty + 2, APP_ICON_W + 8, DESKTOP_TASKBAR_H - 4, fb_colour(50, 50, 80));
+        // Pill hover/active background
+        if (i == _hover_app || is_active)
+        {
+            uint32_t pill_col = is_active
+                ? fb_colour(40, 40, 70)
+                : fb_colour(30, 30, 55);
+            int px = ix - 6;
+            int py = ty + 6;
+            int pw = APP_ICON_W + 12;
+            int ph = DESKTOP_TASKBAR_H - 12;
+
+            gfx_fill_rect(px, py, pw, ph, pill_col);
+            // Pill border
+            gfx_draw_rect(px, py, pw, ph,
+                i == _hover_app ? fb_colour(70, 70, 120) : fb_colour(50, 50, 90));
+        }
 
         if (_apps[i]->icon_bmp)
         {
@@ -219,17 +238,17 @@ void Desktop::draw_taskbar()
             }
         }
 
-        // Active underline
+        // Active dot indicator at bottom of icon
         if (is_active)
-            gfx_fill_rect(ix - 2, ty + DESKTOP_TASKBAR_H - 4, APP_ICON_W + 4, 3, fb_colour(80, 120, 255));
-
-        ix += APP_ICON_W + DESKTOP_ICON_PAD;
+            gfx_fill_rect(ix + APP_ICON_W/2 - 2, ty + DESKTOP_TASKBAR_H - 5,
+                          4, 3, fb_colour(100, 140, 255));
     }
 
-    // Clock
+    // ── Clock (right side) ──
     {
         rtc_time_t t;
         rtc_read(&t);
+
         char clock[9];
         uint8_t hour = (t.hour + 1) % 24;
         clock[0] = '0' + hour / 10;
@@ -241,10 +260,25 @@ void Desktop::draw_taskbar()
         clock[6] = '0' + t.second / 10;
         clock[7] = '0' + t.second % 10;
         clock[8] = '\0';
+
+        // Date — DD/MM
+        char date[6];
+        date[0] = '0' + t.day / 10;
+        date[1] = '0' + t.day % 10;
+        date[2] = '/';
+        date[3] = '0' + t.month / 10;
+        date[4] = '0' + t.month % 10;
+        date[5] = '\0';
+
         int cw = 8 * GFX_FONT_W;
-        int cx = sw - cw - DESKTOP_ICON_PAD;
-        int cy = ty + (DESKTOP_TASKBAR_H - GFX_FONT_H) / 2;
-        gfx_draw_string(cx, cy, clock, fb_colour(200, 200, 220), fb_colour(22, 22, 32));
+        int cx = sw - cw - DESKTOP_ICON_PAD * 2;
+
+        // Time on bottom, date on top
+        int time_y = ty + DESKTOP_TASKBAR_H - GFX_FONT_H - 6;
+        int date_y = ty + 6;
+
+        gfx_draw_string(cx, date_y, date,  fb_colour(160, 160, 190), fb_colour(15, 15, 25));
+        gfx_draw_string(cx, time_y, clock, fb_colour(210, 210, 230), fb_colour(15, 15, 25));
     }
 }
 
@@ -274,25 +308,21 @@ void Desktop::handle_click(int mx, int my)
     // Check taskbar icons
     if (my >= taskbar_y())
     {
-        int ix = DESKTOP_ICON_PAD;
+        int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+        int start_x = (screen_w() - total_w) / 2;
         for (int i = 0; i < _app_count; i++)
         {
+            int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
             int iy = taskbar_y() + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
             if (mx >= ix && mx < ix + APP_ICON_W &&
                 my >= iy && my < iy + APP_ICON_H)
             {
-                // Toggle - if already open and focused, close it
                 if (_focused >= 0 && _windows[_focused])
-                {
                     close_window(_focused);
-                }
                 else
-                {
                     _apps[i]->launch();
-                }
                 return;
             }
-            ix += APP_ICON_W + DESKTOP_ICON_PAD;
         }
         return;
     }
@@ -325,9 +355,11 @@ void Desktop::handle_right_click(int mx, int my)
 {
     if (my >= taskbar_y())
     {
-        int ix = DESKTOP_ICON_PAD;
+        int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+        int start_x = (screen_w() - total_w) / 2;
         for (int i = 0; i < _app_count; i++)
         {
+            int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
             int iy = taskbar_y() + (DESKTOP_TASKBAR_H - APP_ICON_H) / 2;
             if (mx >= ix && mx < ix + APP_ICON_W &&
                 my >= iy && my < iy + APP_ICON_H)
@@ -345,7 +377,6 @@ void Desktop::handle_right_click(int mx, int my)
                 _context_menu.show(mx, my - _context_menu.menu_h() - 4);
                 return;
             }
-            ix += APP_ICON_W + DESKTOP_ICON_PAD;
         }
     }
 }
@@ -380,16 +411,17 @@ void Desktop::run()
             mouse_state_t ms = mouse_get();
             cursor_restore();
 
-            // Hover detection
+            // Hover detection — use centered positions
             int new_hover = -1;
             if (ms.y >= taskbar_y())
             {
-                int ix = DESKTOP_ICON_PAD;
+                int total_w = _app_count * (APP_ICON_W + DESKTOP_ICON_PAD) - DESKTOP_ICON_PAD;
+                int start_x = (screen_w() - total_w) / 2;
                 for (int i = 0; i < _app_count; i++)
                 {
-                    if (ms.x >= ix && ms.x < ix + APP_ICON_W)
+                    int ix = start_x + i * (APP_ICON_W + DESKTOP_ICON_PAD);
+                    if (ms.x >= ix - 6 && ms.x < ix + APP_ICON_W + 6)
                         { new_hover = i; break; }
-                    ix += APP_ICON_W + DESKTOP_ICON_PAD;
                 }
             }
             if (new_hover != _hover_app)
