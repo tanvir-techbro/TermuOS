@@ -67,9 +67,13 @@ extern "C" void kernel_main(void)
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
+
+    printf("Loading GDT...\n");
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
     idt_init(GDT_KERNEL_CODE);
+    
+    printf("Initializing Memory...\n");
     pmm_init(memmap_request.response);
     vmm_init(hhdm_request.response->offset, read_cr3());
     heap_init();
@@ -90,6 +94,7 @@ extern "C" void kernel_main(void)
         vfs_close(fd);
     }
 
+    printf("Starting Scheduler...\n");
     scheduler_init();
     pit_init(100);
     mouse_init();
