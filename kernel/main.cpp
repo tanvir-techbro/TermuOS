@@ -21,12 +21,17 @@ extern "C" {
 #include "drivers/net/virtio_net.h"
 #include "shell/shell.h"
 #include "lib/printf.h"
+#include "user/elf.h"
 }
 
 #include "gui/desktop.hpp"
-#include "gui/term_app.hpp"
+#include "gui/term_app.hpp" (built from kernel/user/apps/test.c)
+extern "C" {
+    extern uint8_t _binary_test_elf_start[];
+    extern uint8_t _binary_test_elf_end[];
+}
 
-#include "config.h"
+
 
 inline void *operator new(size_t, void *ptr) noexcept { return ptr; }
 
@@ -59,6 +64,41 @@ static uint64_t read_cr3(void)
 static uint8_t term_app_storage[sizeof(TerminalApp)] __attribute__((aligned(16)));
 static TerminalApp *term_app = nullptr;
 
+static inline void outb(uint16_t port, uint8_t val)
+{
+    __asm__ volatile("outb %0,%1" :: "a"(val), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port)
+{
+    uint8_t val;
+    __asm__ volatile("inb %1,%0" : "=a"(val) : "Nd"(port));
+    return val;
+}
+
+static void serial_putchar(char c)
+{
+    while (!(inb(0x3FD) & 0x20));
+    outb(0x3F8, (uint8_t)c);
+}
+
+static void serial_init(void)
+{
+    outb(0x3F9, 0x00);
+    outb(0x3FB, 0x80);
+    outb(0x3F8, 0x01);
+    outb(0x3F9, 0x00);
+    outb(0x3FB, 0x03);
+    outb(0x3FA, 0xC7);
+    outb(0x3FC, 0x0B);
+}
+
+static void dual_putchar(char c)
+{
+    terminal_putchar(c);
+    serial_putchar(c);
+}
+
 extern "C" void kernel_main(void)
 {
     if (!fb_request.response || fb_request.response->framebuffer_count < 1)
@@ -67,8 +107,8 @@ extern "C" void kernel_main(void)
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
-
-    printf("Loading GDT...\n");
+    serial_init();
+    kprintf_set_output(dual_putchar);
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
     idt_init(GDT_KERNEL_CODE);
@@ -93,16 +133,23 @@ extern "C" void kernel_main(void)
         vfs_write(fd, motd, 19);
         vfs_close(fd);
     }
+    {
+        size_t elf_size = (size_t)(_binary_test_elf_end - _binary_test_elf_start);
+        int efd = vfs_open("/bin/test", O_WRONLY | O_CREAT);
+        if (efd >= 0)
+        {
+            vfs_write(efd, _binary_test_elf_start, elf_size);
+            vfs_close(efd);
+        }
+    }
 
     printf("Starting Scheduler...\n");
     scheduler_init();
     pit_init(100);
     mouse_init();
 
-#ifdef CONFIG_NET
     pci_init();
     virtio_net_init();
-#endif
 
     // Construct TerminalApp in-place after all subsystems are ready
     term_app = new (term_app_storage) TerminalApp();
@@ -111,5 +158,6 @@ extern "C" void kernel_main(void)
     mouse_set_screen(fb->width, fb->height);
     Desktop::instance().add_app(term_app);
     term_app->launch();
+
     Desktop::instance().run();
 }

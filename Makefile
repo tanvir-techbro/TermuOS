@@ -76,7 +76,8 @@ endif
 ifeq ($(CONFIG_USERSPACE),y)
 SRCS += \
        kernel/user/syscall.c \
-       kernel/user/userspace.c
+       kernel/user/userspace.c \
+       kernel/user/elf.c
 endif
 
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -87,11 +88,24 @@ OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/kernel/sched/context_switch.o \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
        $(BUILD_DIR)/kernel/user/userspace_asm.o \
-       $(BUILD_DIR)/assets/bg_stars.o
+       $(BUILD_DIR)/assets/bg_stars.o \
+       $(BUILD_DIR)/assets/test_elf.o
 
 KERNEL = kernel.elf
 
 all: iso
+
+# ── Userspace programs (musl static libc) ────────────────────────────────────
+# Requires: musl-gcc (apt install musl-tools)
+UFLAGS    = -target x86_64-linux-musl -O2 -static -fno-stack-protector \
+            -fuse-ld=lld
+
+test.elf: kernel/user/apps/test.c
+	$(CC) $(UFLAGS) $< -o $@
+
+$(BUILD_DIR)/assets/test_elf.o: test.elf
+	@mkdir -p $(BUILD_DIR)/assets
+	x86_64-linux-gnu-objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
 
 $(CONFIG_HEADER): .config
 	@echo "#pragma once" > $(CONFIG_HEADER)
@@ -115,6 +129,7 @@ $(BUILD_DIR)/%.o: %.cpp $(CONFIG_HEADER)
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
 	$(NASM) -f elf64 $< -o $@
+
 
 $(KERNEL): $(OBJS)
 	$(LD) -T kernel/arch/x86_64/linker.ld -nostdlib -m elf_x86_64 -o $@ $(OBJS)
@@ -152,10 +167,11 @@ mkbmp-term:
 
 run: iso
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
-		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
+		-netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+		-serial stdio -d int,cpu_reset -no-reboot 2>&1 | tee qemu.log
 
 clean-assets:
 	rm -rf assets
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf

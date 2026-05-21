@@ -1,30 +1,32 @@
-bits 64
+BITS 64
 
-; void jump_to_userspace(uint64_t entry, uint64_t user_stack)
-;   rdi = entry point
-;   rsi = user stack pointer
-;
-; Use iretq to switch to ring 3:
-;   push SS
-;   push RSP
-;   push RFLAGS
-;   push CS
-;   push RIP
-;   iretq
+global enter_userspace
 
-global jump_to_userspace
-jump_to_userspace:
-    ; rdi = entry, rsi = user_stack
+section .text
 
-    ; Build iretq frame on current (kernel) stack
-    ; SS = user data selector | 3
-    push 0x1b           ; user SS  = GDT_USER_DATA | 3 = 0x18|3 = 0x1b
-    push rsi            ; user RSP
-    pushfq              ; RFLAGS
-    pop  rax
-    or   rax, (1 << 9) ; set IF (enable interrupts in userspace)
-    push rax
-    push 0x23           ; user CS  = GDT_USER_CODE | 3 = 0x20|3 = 0x23
-    push rdi            ; user RIP = entry
+enter_userspace:
+
+    cli
+
+    mov ax, 0x23
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    ; stack segment
+    push 0x23
+
+    ; user rsp
+    push rsi
+
+    ; rflags
+    pushfq
+
+    ; code segment
+    push 0x1B
+
+    ; user rip
+    push rdi
 
     iretq

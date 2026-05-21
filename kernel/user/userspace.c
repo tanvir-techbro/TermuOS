@@ -13,5 +13,5 @@ void jump_userspace(uint64_t entry, uint64_t stack)
 {
     tss_set_kernel_stack(gdt_get_exception_stack());
     kprintf("userspace: jumping to 0x%x\n", entry);
-    jump_to_userspace(entry, stack);
+    enter_userspace(entry, stack);
 }

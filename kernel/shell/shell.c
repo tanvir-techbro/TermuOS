@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-#include "../config.h"
+#include "../user/elf.h"
 
 #define INPUT_MAX 256
 #define MAX_ARGS 16
@@ -186,9 +186,8 @@ static void cmd_help(int argc, char **argv)
     (void)argv;
     kprintf("Commands: help clear echo uname uptime mem threads\n");
     kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
-    #ifdef CONFIG_NET
+    kprintf("          exec\n");
     kprintf("          ifconfig ping arp\n");
-    #endif
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -206,7 +205,7 @@ static void cmd_echo(int argc, char **argv)
         if (i < argc - 1)
             terminal_putchar(' ');
     }
-    kprintf('\n');
+    kprintf("\n");
 }
 
 static void cmd_uname(int argc, char **argv)
@@ -220,8 +219,8 @@ static void cmd_uptime(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    
-    uint64_t uptime = syscall_dispatch(SYS_UPTIME, 0, 0, 0);
+
+    uint64_t uptime = syscall_dispatch(SYS_UPTIME, 0, 0, 0, 0, 0, 0);
 
     char buf[32];
     uint_to_string(uptime, buf);
@@ -237,7 +236,7 @@ static void cmd_mem(int argc, char **argv)
     (void)argv;
     size_t f = pmm_free_pages(), t = pmm_total_pages(), u = t - f;
     kprintf("Total:%uMB Used:%uMB Free:%uMB\n",
-                (t * 4096) / (1024 * 1024), (u * 4096) / (1024 * 1024), (f * 4096) / (1024 * 1024));
+            (t * 4096) / (1024 * 1024), (u * 4096) / (1024 * 1024), (f * 4096) / (1024 * 1024));
 }
 
 static void cmd_threads(int argc, char **argv)
@@ -434,7 +433,6 @@ static void cmd_reboot(int argc, char **argv)
 }
 
 // ─── Network commands ─────────────────────────────────────────────────────────
-#ifdef CONFIG_NET
 static void cmd_ifconfig(int argc, char **argv)
 {
     (void)argc;
@@ -480,7 +478,6 @@ static void cmd_arp(int argc, char **argv)
     kprintf("arp: requesting gateway " IP_FMT "\n", IP_ARGS(netif.gateway));
     net_send_arp_request(netif.gateway);
 }
-#endif
 
 // ─── PID ─────────────────────────────────────────────────────────────────
 
@@ -489,7 +486,7 @@ static void cmd_pid(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    uint64_t pid = syscall_dispatch(SYS_GETPID, 0, 0, 0);
+    uint64_t pid = syscall_dispatch(SYS_GETPID, 0, 0, 0, 0, 0, 0);
 
     kprintf("PID: ");
 
@@ -507,7 +504,7 @@ static void cmd_sleep(int argc, char **argv)
 
     kprintf("Sleeping...\n");
 
-    syscall_dispatch(SYS_SLEEP, 100, 0, 0);
+    syscall_dispatch(SYS_SLEEP, 100, 0, 0, 0, 0, 0);
 
     kprintf("Awake!\n");
 }
@@ -519,9 +516,24 @@ static void cmd_yield(int argc, char **argv)
 
     kprintf("Yielding CPU...\n");
 
-    syscall_dispatch(SYS_YIELD, 0, 0, 0);
+    syscall_dispatch(SYS_YIELD, 0, 0, 0, 0, 0, 0);
 
     kprintf("Returned from yield\n");
+}
+
+// ─── Exec ─────────────────────────────────────────────────────────────────────
+
+static void cmd_exec(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        kprintf("exec: usage: exec <path>\n");
+        return;
+    }
+    static char path[VFS_PATH_MAX];
+    resolve_path(argv[1], path, VFS_PATH_MAX);
+    if (elf_load(path) < 0)
+        kprintf("exec: failed to load %s\n", path);
 }
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
@@ -533,31 +545,29 @@ typedef struct
 } command_t;
 static const command_t commands[] = {
     {"help", cmd_help},
-    {"clear", cmd_clear}, 
-    {"echo", cmd_echo}, 
-    {"uname", cmd_uname}, 
-    {"uptime", cmd_uptime}, 
-    {"mem", cmd_mem}, 
-    {"threads", cmd_threads}, 
-    {"pwd", cmd_pwd}, 
-    {"cd", cmd_cd}, 
-    {"ls", cmd_ls}, 
-    {"cat", cmd_cat}, 
-    {"write", cmd_write}, 
-    {"touch", cmd_touch}, 
-    {"mkdir", cmd_mkdir}, 
-    {"rm", cmd_rm}, 
+    {"clear", cmd_clear},
+    {"echo", cmd_echo},
+    {"uname", cmd_uname},
+    {"uptime", cmd_uptime},
+    {"mem", cmd_mem},
+    {"threads", cmd_threads},
+    {"pwd", cmd_pwd},
+    {"cd", cmd_cd},
+    {"ls", cmd_ls},
+    {"cat", cmd_cat},
+    {"write", cmd_write},
+    {"touch", cmd_touch},
+    {"mkdir", cmd_mkdir},
+    {"rm", cmd_rm},
     {"reboot", cmd_reboot},
-    #ifdef CONFIG_NET
-    {"ifconfig", cmd_ifconfig}, 
-    {"ping", cmd_ping}, 
+    {"ifconfig", cmd_ifconfig},
+    {"ping", cmd_ping},
     {"arp", cmd_arp},
-    #endif
     {"pid", cmd_pid},
     {"sleep", cmd_sleep},
     {"yield", cmd_yield},
-    {NULL, NULL}
-};
+    {"exec", cmd_exec},
+    {NULL, NULL}};
 
 static void dispatch(char *line)
 {
@@ -602,7 +612,11 @@ void shell_run_command(const char *line)
 {
     static char buf[INPUT_MAX];
     int i = 0;
-    while (line[i] && i < INPUT_MAX - 1) { buf[i] = line[i]; i++; }
+    while (line[i] && i < INPUT_MAX - 1)
+    {
+        buf[i] = line[i];
+        i++;
+    }
     buf[i] = '\0';
     dispatch(buf);
 }

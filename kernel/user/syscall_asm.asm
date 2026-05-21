@@ -2,7 +2,6 @@ bits 64
 
 extern syscall_dispatch
 
-; Kernel stack for syscall handling
 section .bss
 align 16
 syscall_kernel_stack_bottom:
@@ -10,38 +9,41 @@ syscall_kernel_stack_bottom:
 global syscall_kernel_stack_top
 syscall_kernel_stack_top:
 
-; Scratch space to save user RSP while switching stacks
 syscall_user_rsp: resq 1
 
 section .text
 
 global syscall_entry
 syscall_entry:
-    ; CPU has set: RCX=user RIP, R11=user RFLAGS, CS/SS=kernel selectors
-    ; RSP is still user RSP — save it and switch to kernel stack
+    ; On entry (Linux x86-64 syscall ABI):
+    ;   rax = syscall number
+    ;   rdi = arg1, rsi = arg2, rdx = arg3
+    ;   r10 = arg4, r8  = arg5, r9  = arg6
+    ;   rcx = user RIP (clobbered by syscall instruction)
+    ;   r11 = user RFLAGS (clobbered by syscall instruction)
 
     mov [rel syscall_user_rsp], rsp
     lea rsp, [rel syscall_kernel_stack_top]
 
-    ; Save caller-saved regs we use
-    push rcx    ; user RIP
-    push r11    ; user RFLAGS
+    push rcx            ; save user RIP
+    push r11            ; save user RFLAGS
 
-    ; syscall_dispatch(num=rax, a=rdi, b=rsi, c=rdx)
-    ; rax=syscall number, rdi/rsi/rdx=args (Linux ABI)
-    mov  rcx, rdx       ; shift rdx -> rcx for 4th C arg
-    mov  rdx, rsi       ; rsi -> rdx
-    mov  rsi, rdi       ; rdi -> rsi
-    mov  rdi, rax       ; num -> rdi
-    ; rdx=b, rcx=c are already set above; rsi=a, rdi=num
+    ; Call syscall_dispatch(num, a, b, c, d, e, f)
+    ; C ABI:            rdi  rsi rdx rcx r8  r9  [rsp+8]
+    ; Linux syscall:    rax  rdi rsi rdx r10 r8  r9
+    push r9             ; arg6 -> stack (7th C arg)
+    mov  r9,  r8        ; arg5 -> r9
+    mov  r8,  r10       ; arg4 -> r8
+    mov  rcx, rdx       ; arg3 -> rcx
+    mov  rdx, rsi       ; arg2 -> rdx
+    mov  rsi, rdi       ; arg1 -> rsi
+    mov  rdi, rax       ; num  -> rdi
 
-    ; actually dispatch(num, a, b, c) = (rdi, rsi, rdx, rcx)
-    call syscall_dispatch   ; return value in rax
+    call syscall_dispatch
 
-    pop  r11    ; user RFLAGS
-    pop  rcx    ; user RIP
+    add  rsp, 8         ; clean up arg6 from stack
 
-    ; Restore user stack
-    mov rsp, [rel syscall_user_rsp]
-
-    o64 sysret      ; 64-bit sysret
+    pop  r11            ; restore user RFLAGS
+    pop  rcx            ; restore user RIP
+    mov  rsp, [rel syscall_user_rsp]
+    o64 sysret

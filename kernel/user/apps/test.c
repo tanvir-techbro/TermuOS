@@ -1,15 +1,25 @@
-#include "../lib/syscall.h"
-#include "../../lib/printf.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-void user_main(void)
+int main(void)
 {
-    int pid = getpid();
+    printf("Hello from userspace!\n");
+    printf("PID: %d\n", getpid());
 
-    if (pid == 1)
+    /* Test malloc */
+    char *buf = malloc(64);
+    if (buf)
     {
-        // success
-        kprintf("PID OK\n");
+        strcpy(buf, "malloc works!\n");
+        printf("%s", buf);
+        free(buf);
+    }
+    else
+    {
+        printf("malloc failed\n");
     }
 
-    while (1);
+    return 0;
 }

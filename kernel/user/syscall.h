@@ -1,15 +1,24 @@
 #pragma once
 #include <stdint.h>
 
-#define SYS_EXIT    0
-#define SYS_WRITE   1
-#define SYS_READ    2
-#define SYS_OPEN    3
-#define SYS_CLOSE   4
-#define SYS_GETPID  5
-#define SYS_SLEEP   6
-#define SYS_UPTIME  7
-#define SYS_YIELD   8
+/*
+ * Syscall numbers match the Linux x86-64 ABI so musl can be used
+ * without modification.
+ */
+#define SYS_READ        0
+#define SYS_WRITE       1
+#define SYS_OPEN        2
+#define SYS_CLOSE       3
+#define SYS_FSTAT       5
+#define SYS_MMAP        9
+#define SYS_MUNMAP      11
+#define SYS_BRK         12
+#define SYS_EXIT        60
+#define SYS_GETPID      39
+#define SYS_YIELD       24   /* sched_yield */
+#define SYS_SLEEP       35   /* nanosleep */
+#define SYS_UPTIME      201  /* custom — unused by musl */
 
-void syscall_init(void);
-uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c);
+void     syscall_init(void);
+uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c,
+                          uint64_t d, uint64_t e, uint64_t f);
