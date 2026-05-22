@@ -1,7 +1,7 @@
 # TermuOS
 
 TermuOS is an open-source x86_64 hobby operating system focused on a Linux-inspired terminal-first environment.
-The project is written primarily in C and x86_64 Assembly and is designed for learning low-level systems programming, kernel development, and operating system architecture.
+The operating system is written primarily in C and x86_64 Assembly and is designed for learning low-level systems programming, kernel development, and operating system architecture.
 
 ---
 
