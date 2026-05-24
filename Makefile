@@ -108,5 +108,9 @@ run: iso
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
 		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
 
+limine:
+	git clone https://github.com/limine-bootloader/limine.git \
+		--branch=v8.x-binary --depth=1
+
 clean:
 	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf
