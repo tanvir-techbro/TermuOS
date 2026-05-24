@@ -1,13 +1,8 @@
 CC   = clang
-CXX  = clang++
 LD   = ld.lld
 NASM = nasm
 
 BUILD_DIR = kbuild
-
-CONFIG_HEADER = kernel/config.h
-
-include .config
 
 SRCS :=
 CPPSRCS :=
@@ -16,9 +11,8 @@ CFLAGS = -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic \
          -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel \
          -O2 -Wall -Wextra -Ikernel -Ilimine
 
-CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti -fno-use-cxa-atexit -std=c++17
-
 SRCS += \
+       kernel/main.c \
        kernel/arch/x86_64/gdt.c \
        kernel/arch/x86_64/idt.c \
        kernel/arch/x86_64/pic.c \
@@ -41,20 +35,7 @@ SRCS += \
 
 SRCS += \
        kernel/drivers/video/fb.c \
-       kernel/drivers/video/gfx.c \
        kernel/drivers/video/terminal.c
-
-CPPSRCS += \
-       kernel/main.cpp \
-       kernel/gui/new.cpp \
-       kernel/gui/bitmap.cpp \
-       kernel/gui/window.cpp \
-       kernel/gui/widget.cpp \
-       kernel/gui/ui.cpp \
-       kernel/gui/desktop.cpp \
-       kernel/gui/term_app.cpp \
-	kernel/gui/context_menu.cpp \
-       kernel/gui/launcher.cpp
 
 ifeq ($(CONFIG_NET),y)
 SRCS += \
@@ -81,50 +62,20 @@ SRCS += \
 endif
 
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
-       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPPSRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/entry.o \
        $(BUILD_DIR)/kernel/arch/x86_64/gdt_asm.o \
        $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
        $(BUILD_DIR)/kernel/sched/context_switch.o \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
-       $(BUILD_DIR)/kernel/user/userspace_asm.o \
-       $(BUILD_DIR)/assets/bg_stars.o \
-       $(BUILD_DIR)/assets/test_elf.o
+       $(BUILD_DIR)/kernel/user/userspace_asm.o
 
 KERNEL = kernel.elf
 
 all: iso
 
-# ── Userspace programs (musl static libc) ────────────────────────────────────
-# Requires: musl-gcc (apt install musl-tools)
-UFLAGS    = -target x86_64-linux-musl -O2 -static -fno-stack-protector \
-            -fuse-ld=lld
-
-test.elf: kernel/user/apps/test.c
-	$(CC) $(UFLAGS) $< -o $@
-
-$(BUILD_DIR)/assets/test_elf.o: test.elf
-	@mkdir -p $(BUILD_DIR)/assets
-	x86_64-linux-gnu-objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
-
-$(CONFIG_HEADER): .config
-	@echo "#pragma once" > $(CONFIG_HEADER)
-	@echo "" >> $(CONFIG_HEADER)
-	@grep "=y" .config | sed 's/=y//' | while read line; do \
-		echo "#define $$line" >> $(CONFIG_HEADER); \
-	done
-
-$(BUILD_DIR)/assets/bg_stars.o: assets/bg_stars.bmp
-	@mkdir -p $(BUILD_DIR)/assets
-	x86_64-linux-gnu-objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
-
 $(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/%.o: %.cpp $(CONFIG_HEADER)
-	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
@@ -153,25 +104,9 @@ iso: $(KERNEL)
 		limine.conf=iso/limine.conf \
 		-o termuos.iso
 
-menuconfig:
-	python3 scripts/menuconfig.py
-
-mkbmp:
-	python3 scripts/mkbmp.py
-
-mkbmp-grad:
-	python3 scripts/mkbmp.py bg gradient
-
-mkbmp-term:
-	python3 scripts/mkbmp.py icon terminal
-
 run: iso
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
-		-netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
-		-serial stdio -d int,cpu_reset -no-reboot 2>&1 | tee qemu.log
-
-clean-assets:
-	rm -rf assets
+		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
 
 clean:
 	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf

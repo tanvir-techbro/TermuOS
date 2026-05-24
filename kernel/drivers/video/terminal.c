@@ -1,6 +1,5 @@
 #include "terminal.h"
 #include "fb.h"
-#include "gfx.h"
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 

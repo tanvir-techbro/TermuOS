@@ -18,7 +18,6 @@
 #include "drivers/net/virtio_net.h"
 #include "shell/shell.h"
 #include "lib/printf.h"
-#include "user/elf.h"
 
 extern uint8_t _binary_test_elf_start[];
 extern uint8_t _binary_test_elf_end[];
@@ -60,29 +59,6 @@ static inline uint8_t inb(uint16_t port)
     return val;
 }
 
-static void serial_putchar(char c)
-{
-    while (!(inb(0x3FD) & 0x20));
-    outb(0x3F8, (uint8_t)c);
-}
-
-static void serial_init(void)
-{
-    outb(0x3F9, 0x00);
-    outb(0x3FB, 0x80);
-    outb(0x3F8, 0x01);
-    outb(0x3F9, 0x00);
-    outb(0x3FB, 0x03);
-    outb(0x3FA, 0xC7);
-    outb(0x3FC, 0x0B);
-}
-
-static void dual_putchar(char c)
-{
-    terminal_putchar(c);
-    serial_putchar(c);
-}
-
 void kernel_main(void)
 {
     if (!fb_request.response || fb_request.response->framebuffer_count < 1)
@@ -91,13 +67,12 @@ void kernel_main(void)
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
-    serial_init();
-    kprintf_set_output(dual_putchar);
+
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
     idt_init(GDT_KERNEL_CODE);
     
-    printf("Initializing Memory...\n");
+    kprintf("Initializing Memory...\n");
     pmm_init(memmap_request.response);
     vmm_init(hhdm_request.response->offset, read_cr3());
     heap_init();
@@ -117,17 +92,8 @@ void kernel_main(void)
         vfs_write(fd, motd, 19);
         vfs_close(fd);
     }
-    {
-        size_t elf_size = (size_t)(_binary_test_elf_end - _binary_test_elf_start);
-        int efd = vfs_open("/bin/test", O_WRONLY | O_CREAT);
-        if (efd >= 0)
-        {
-            vfs_write(efd, _binary_test_elf_start, elf_size);
-            vfs_close(efd);
-        }
-    }
 
-    printf("Starting Scheduler...\n");
+    kprintf("Starting Scheduler...\n");
     scheduler_init();
     pit_init(100);
 
