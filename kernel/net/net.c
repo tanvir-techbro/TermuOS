@@ -148,14 +148,23 @@ static void handle_arp(const eth_hdr_t *eth, const arp_pkt_t *arp)
 
 // ─── ICMP ─────────────────────────────────────────────────────────────────────
 
+static ip4_t route(ip4_t dst)
+{
+    for (int i = 0; i < 4; i++)
+        if ((dst.b[i] & netif.netmask.b[i]) != (netif.ip.b[i] & netif.netmask.b[i]))
+            return netif.gateway;
+    return dst;
+}
+
 void net_send_icmp_echo(ip4_t dst, uint16_t id, uint16_t seq)
 {
     mac_t dst_mac;
-    if (arp_table_get(dst, &dst_mac) < 0)
+    ip4_t nexthop = route(dst);
+    if (arp_table_get(nexthop, &dst_mac) < 0)
     {
         kprintf("net: no ARP entry for " IP_FMT ", sending ARP request\n",
-                IP_ARGS(dst));
-        net_send_arp_request(dst);
+                IP_ARGS(nexthop));
+        net_send_arp_request(nexthop);
         return;
     }
 
