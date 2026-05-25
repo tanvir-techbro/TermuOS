@@ -14,8 +14,6 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-#include "../user/elf.h"
-
 #define INPUT_MAX 256
 #define MAX_ARGS 16
 #define HOSTNAME "TermuOS"
@@ -521,19 +519,13 @@ static void cmd_yield(int argc, char **argv)
     kprintf("Returned from yield\n");
 }
 
-// ─── Exec ─────────────────────────────────────────────────────────────────────
+// ─── Exec ─────────────────────────────────────────────────────────────────
 
 static void cmd_exec(int argc, char **argv)
 {
-    if (argc < 2)
-    {
-        kprintf("exec: usage: exec <path>\n");
-        return;
-    }
-    static char path[VFS_PATH_MAX];
-    resolve_path(argv[1], path, VFS_PATH_MAX);
-    if (elf_load(path) < 0)
-        kprintf("exec: failed to load %s\n", path);
+    (void)argc;
+    (void)argv;
+    kprintf("exec: ELF loader not available in this build\n");
 }
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────

@@ -55,7 +55,7 @@ static int syscall_supported(void)
 
 static uint64_t current_brk = 0;
 
-extern pagemap_t current_user_pm;   /* set by elf_load before jump */
+pagemap_t current_user_pm;   /* dummy - elf_load removed */
 
 static uint64_t sys_brk(uint64_t addr)
 {

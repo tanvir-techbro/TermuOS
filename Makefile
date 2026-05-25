@@ -37,29 +37,20 @@ SRCS += \
        kernel/drivers/video/fb.c \
        kernel/drivers/video/terminal.c
 
-ifeq ($(CONFIG_NET),y)
 SRCS += \
        kernel/drivers/net/pci.c \
        kernel/drivers/net/virtio_net.c \
        kernel/net/net.c
-endif
 
-ifeq ($(CONFIG_VFS),y)
 SRCS += \
        kernel/fs/vfs.c \
        kernel/fs/ramfs.c
-endif
 
-ifeq ($(CONFIG_SHELL),y)
 SRCS += kernel/shell/shell.c
-endif
 
-ifeq ($(CONFIG_USERSPACE),y)
 SRCS += \
        kernel/user/syscall.c \
-       kernel/user/userspace.c \
-       kernel/user/elf.c
-endif
+       kernel/user/userspace.c
 
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/entry.o \
@@ -73,7 +64,7 @@ KERNEL = kernel.elf
 
 all: iso
 
-$(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
+$(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -113,4 +104,4 @@ limine:
 		--branch=v8.x-binary --depth=1
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/

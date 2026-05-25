@@ -19,9 +19,6 @@
 #include "shell/shell.h"
 #include "lib/printf.h"
 
-extern uint8_t _binary_test_elf_start[];
-extern uint8_t _binary_test_elf_end[];
-
 LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests_start"))) static volatile LIMINE_REQUESTS_START_MARKER
@@ -67,6 +64,10 @@ void kernel_main(void)
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
+
+    terminal_init();
+    terminal_set_size(fb->width, fb->height);
+    fb_clear(0x0D0D0D);
 
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
