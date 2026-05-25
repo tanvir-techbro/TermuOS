@@ -1,6 +1,7 @@
 #include "shell.h"
 #include "../drivers/video/terminal.h"
 #include "../drivers/input/keyboard.h"
+#include "../drivers/net/virtio_net.h"
 #include "../mm/pmm.h"
 #include "../mm/heap.h"
 #include "../arch/x86_64/pit.h"
@@ -20,6 +21,14 @@
 #define USERNAME "root"
 
 static char cwd[VFS_PATH_MAX] = "/";
+
+static inline uint8_t inb(uint16_t p)
+{
+    uint8_t v;
+    __asm__ volatile("inb %1,%0" : "=a"(v) : "Nd"(p));
+    return v;
+}
+static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1" ::"a"(v), "Nd"(p)); }
 
 const char *shell_get_cwd(void)
 {
@@ -463,10 +472,14 @@ static void cmd_ping(int argc, char **argv)
     }
     dst.b[octet] = val;
     kprintf("ping: " IP_FMT "\n", IP_ARGS(dst));
-    net_send_arp_request(dst);
-    for (volatile int i = 0; i < 10000000; i++)
-        ;
-    net_send_icmp_echo(dst, 1, 1);
+    net_send_icmp_echo(dst, 1, 1); /* sends ARP if needed */
+    /* poll RX while waiting - IRQ may not fire without MSI-X */
+    for (volatile int i = 0; i < 500; i++)
+    {
+        virtio_net_poll();
+        for (volatile int j = 0; j < 100000; j++)   ;
+    }
+    net_send_icmp_echo(dst, 1, 2);
 }
 
 static void cmd_arp(int argc, char **argv)
@@ -528,6 +541,22 @@ static void cmd_exec(int argc, char **argv)
     kprintf("exec: ELF loader not available in this build\n");
 }
 
+static void cmd_update(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    kprintf("update: signalling host...\n");
+    // write magic string to COM1
+    const char *magic = "TERMUOS_UPDATE\n";
+    for (const char *p = magic; *p; p++)
+    {
+        while (!(inb(0x3FD) & 0x20)) ; // wait for TX ready
+        outb(0x3F8, *p);
+    }
+    kprintf("update: rebooting...\n");
+    for (volatile int i = 0; i < 10000000; i++) ;
+    outb(0x64, 0xFE); // PS/2 reset
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -559,6 +588,7 @@ static const command_t commands[] = {
     {"sleep", cmd_sleep},
     {"yield", cmd_yield},
     {"exec", cmd_exec},
+    {"update", cmd_update},
     {NULL, NULL}};
 
 static void dispatch(char *line)
