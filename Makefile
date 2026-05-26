@@ -119,4 +119,4 @@ limine:
 		--branch=v8.x-binary --depth=1
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf disk.img tools/mkfs_tfs
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ disk.img tools/mkfs_tfs
