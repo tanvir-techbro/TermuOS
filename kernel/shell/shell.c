@@ -7,6 +7,7 @@
 #include "../arch/x86_64/pit.h"
 #include "../sched/scheduler.h"
 #include "../fs/vfs.h"
+#include "../fs/tfs.h"
 #include "../net/net.h"
 #include "../user/syscall.h"
 #include "../lib/printf.h"
@@ -270,12 +271,12 @@ static void cmd_pwd(int argc, char **argv)
 
 static void cmd_cd(int argc, char **argv)
 {
+    static char path[VFS_PATH_MAX];
     if (argc < 2)
     {
-        kprintf("cd: missing argument\n");
+        sh_strcpy(cwd, "/", VFS_PATH_MAX);
         return;
     }
-    static char path[VFS_PATH_MAX];
     resolve_path(argv[1], path, VFS_PATH_MAX);
     uint32_t type;
     if (vfs_stat(path, &type, NULL) < 0)
@@ -532,7 +533,26 @@ static void cmd_yield(int argc, char **argv)
     kprintf("Returned from yield\n");
 }
 
-// ─── Exec ─────────────────────────────────────────────────────────────────
+// ─── Exec ─────────────────────────────────────────────────────────────────────
+
+static void cmd_mkfs(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    kprintf("mkfs: formatting disk as TFS...\n");
+    if (tfs_format(8192) < 0)
+    {
+        kprintf("mkfs: format failed\n");
+        return;
+    }
+    if (tfs_mount() < 0)
+    {
+        kprintf("mkfs: formatted but mount failed\n");
+        return;
+    }
+    vfs_mount("/mnt", tfs_get_root());
+    kprintf("mkfs: done — disk mounted at /mnt\n");
+}
 
 static void cmd_exec(int argc, char **argv)
 {
@@ -588,7 +608,7 @@ static const command_t commands[] = {
     {"sleep", cmd_sleep},
     {"yield", cmd_yield},
     {"exec", cmd_exec},
-    {"update", cmd_update},
+    {"mkfs", cmd_mkfs},
     {NULL, NULL}};
 
 static void dispatch(char *line)

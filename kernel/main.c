@@ -14,6 +14,8 @@
 #include "sched/scheduler.h"
 #include "fs/vfs.h"
 #include "fs/ramfs.h"
+#include "fs/tfs.h"
+#include "drivers/storage/ata.h"
 #include "drivers/net/pci.h"
 #include "drivers/net/virtio_net.h"
 #include "shell/shell.h"
@@ -23,8 +25,8 @@ LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests_start"))) static volatile LIMINE_REQUESTS_START_MARKER
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request fb_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0};
+    __attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request fb_request = {
+        .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_memmap_request memmap_request = {
     .id = LIMINE_MEMMAP_REQUEST, .revision = 0};
@@ -37,7 +39,8 @@ __attribute__((used, section(".limine_requests"))) static volatile struct limine
 
 __attribute__((used, section(".limine_requests_end"))) static volatile LIMINE_REQUESTS_END_MARKER
 
-static uint64_t read_cr3(void)
+    static uint64_t
+    read_cr3(void)
 {
     uint64_t cr3;
     __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
@@ -46,7 +49,7 @@ static uint64_t read_cr3(void)
 
 static inline void outb(uint16_t port, uint8_t val)
 {
-    __asm__ volatile("outb %0,%1" :: "a"(val), "Nd"(port));
+    __asm__ volatile("outb %0,%1" ::"a"(val), "Nd"(port));
 }
 
 static inline uint8_t inb(uint16_t port)
@@ -59,12 +62,12 @@ static inline uint8_t inb(uint16_t port)
 void kernel_main(void)
 {
     if (!fb_request.response || fb_request.response->framebuffer_count < 1)
-        for (;;) __asm__ volatile("hlt");
+        for (;;)
+            __asm__ volatile("hlt");
 
     struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
 
     fb_init(fb);
-
     terminal_init();
     terminal_set_size(fb->width, fb->height);
     fb_clear(0x0D0D0D);
@@ -72,7 +75,7 @@ void kernel_main(void)
     gdt_init();
     tss_set_kernel_stack(gdt_get_exception_stack());
     idt_init(GDT_KERNEL_CODE);
-    
+
     kprintf("Initializing Memory...\n");
     pmm_init(memmap_request.response);
     vmm_init(hhdm_request.response->offset, read_cr3());
@@ -86,12 +89,24 @@ void kernel_main(void)
     vfs_mkdir("/home");
     vfs_mkdir("/home/root");
     vfs_mkdir("/bin");
+    vfs_mkdir("/mnt");
     int fd = vfs_open("/etc/motd", O_WRONLY | O_CREAT);
     if (fd >= 0)
     {
         const char *motd = "Welcome to TermuOS\n";
         vfs_write(fd, motd, 19);
         vfs_close(fd);
+    }
+
+    ata_init();
+    if (tfs_mount() == 0)
+    {
+        vfs_mount("/mnt", tfs_get_root());
+        kprintf("tfs: /mnt ready\n");
+    }
+    else
+    {
+        kprintf("tfs: no disk or unformatted — run 'mkfs' to format\n");
     }
 
     kprintf("Starting Scheduler...\n");
