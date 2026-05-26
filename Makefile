@@ -43,8 +43,13 @@ SRCS += \
        kernel/net/net.c
 
 SRCS += \
+       kernel/drivers/storage/ata.c \
+       kernel/drivers/storage/disk.c
+
+SRCS += \
        kernel/fs/vfs.c \
-       kernel/fs/ramfs.c
+       kernel/fs/ramfs.c \
+       kernel/fs/tfs.c
 
 SRCS += kernel/shell/shell.c
 
@@ -56,7 +61,9 @@ OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/kernel/arch/x86_64/entry.o \
        $(BUILD_DIR)/kernel/arch/x86_64/gdt_asm.o \
        $(BUILD_DIR)/kernel/arch/x86_64/isr.o \
-       $(BUILD_DIR)/kernel/sched/context_switch.o \
+       $(BUILD_DIR)/kernel/sched/context_switch.o
+
+OBJS += \
        $(BUILD_DIR)/kernel/user/syscall_asm.o \
        $(BUILD_DIR)/kernel/user/userspace_asm.o
 
@@ -64,7 +71,7 @@ KERNEL = kernel.elf
 
 all: iso
 
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/%.o: %.c $(CONFIG_HEADER)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -95,13 +102,21 @@ iso: $(KERNEL)
 		limine.conf=iso/limine.conf \
 		-o termuos.iso
 
-run: iso
+run: iso disk.img
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
-		-netdev user,id=net0 -device virtio-net-pci,netdev=net0
+		-netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+		-drive file=disk.img,format=raw,if=ide \
+		-serial stdio
+
+disk.img: tools/mkfs_tfs
+	./tools/mkfs_tfs disk.img 64
+
+tools/mkfs_tfs: tools/mkfs_tfs.c
+	cc -O2 -o tools/mkfs_tfs tools/mkfs_tfs.c
 
 limine:
 	git clone https://github.com/limine-bootloader/limine.git \
 		--branch=v8.x-binary --depth=1
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ test.elf disk.img tools/mkfs_tfs

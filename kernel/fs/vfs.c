@@ -95,21 +95,36 @@ vfs_node_t *vfs_resolve(const char *path)
     if (!path || path[0] != '/')
         return NULL;
 
-    // Find mount point (only "/" supported for now — simple and correct)
+    // Find longest matching mount point
     mount_t *best = NULL;
+    int best_len = -1;
     for (int i = 0; i < VFS_MAX_MOUNTS; i++)
     {
-        if (mounts[i].used && vfs_strcmp(mounts[i].path, "/") == 0)
+        if (!mounts[i].used)
+            continue;
+        int mlen = vfs_strlen(mounts[i].path);
+        int matches = 1;
+        for (int j = 0; j < mlen; j++)
+            if (path[j] != mounts[i].path[j])
+            {
+                matches = 0;
+                break;
+            }
+        // For "/" mount (mlen==1), any absolute path matches
+        int after_ok = (mlen == 1) || (path[mlen] == '/' || path[mlen] == '\0');
+        if (matches && after_ok && mlen > best_len)
         {
             best = &mounts[i];
-            break;
+            best_len = mlen;
         }
     }
     if (!best)
         return NULL;
 
     vfs_node_t *node = best->root;
-    const char *p = path + 1; // skip leading '/'
+    const char *p = path + best_len;
+    if (*p == '/')
+        p++;
 
     while (*p && node)
     {
@@ -129,8 +144,16 @@ vfs_node_t *vfs_resolve(const char *path)
         if (ci == 0)
             break;
         if (!node->ops || !node->ops->finddir)
+        {
+            if (node != best->root && node->ops && node->ops->close)
+                node->ops->close(node);
             return NULL;
+        }
+        vfs_node_t *prev = node;
         node = node->ops->finddir(node, component);
+        // free intermediate node (not the mount root)
+        if (prev != best->root && prev->ops && prev->ops->close)
+            prev->ops->close(prev);
     }
 
     return node;
@@ -199,11 +222,12 @@ int vfs_open(const char *path, uint32_t flags)
     if (fd < 0)
         return -1;
 
-    // Handle O_TRUNC
+    // Handle O_TRUNC — write zero bytes at offset 0 to signal truncate
     if ((flags & O_TRUNC) && node->type == VFS_FILE)
     {
+        node->size = 0;
         if (node->ops && node->ops->write)
-            node->size = 0;
+            node->ops->write(node, 0, 0, 0);
     }
 
     fds[fd].node = node;
