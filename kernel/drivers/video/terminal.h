@@ -7,5 +7,6 @@ void terminal_set_fg(uint8_t r, uint8_t g, uint8_t b);
 void terminal_set_bg(uint8_t r, uint8_t g, uint8_t b);
 void terminal_putchar(char c);
 void terminal_puts(const char *s);
+void terminal_cursor_tick(void);
 
 void terminal_set_size_from_current(void);

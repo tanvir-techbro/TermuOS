@@ -1,6 +1,7 @@
 #include "pit.h"
 #include "idt.h"
 #include "../../sched/scheduler.h"
+#include "../../drivers/video/terminal.h"
 #include <stdint.h>
 
 #define PIT_CHANNEL0 0x40
@@ -18,6 +19,11 @@ static void pit_irq(registers_t *r)
 {
     (void)r;
     timer_ticks++;
+
+    if (timer_ticks % 50 == 0) {
+        terminal_cursor_tick();
+    }
+
     scheduler_tick(r); // give the scheduler a chance to switch
 }
 
