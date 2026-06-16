@@ -193,7 +193,7 @@ static void cmd_help(int argc, char **argv)
     (void)argc;
     (void)argv;
     kprintf("Commands: help clear echo uname uptime mem threads\n");
-    kprintf("          ls cd pwd cat write touch mkdir rm reboot\n");
+    kprintf("          ls cd pwd cat write touch mkdir rm reboot shutdown\n");
     kprintf("          exec\n");
     kprintf("          ifconfig ping arp\n");
 }
@@ -427,6 +427,23 @@ static void cmd_rm(int argc, char **argv)
         kprintf("rm: %s: not found\n", argv[1]);
 }
 
+static inline void outw(uint16_t p, uint16_t v) { __asm__ volatile("outw %0,%1" ::"a"(v), "Nd"(p)); }
+
+static void cmd_shutdown(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    kprintf("Shutting down...\n");
+    // QEMU/VirtualBox ACPI sleep
+    outw(0x604, 0x2000);
+    // Bochs/Older QEMU
+    outw(0xB004, 0x2000);
+    // QEMU debug exit
+    outb(0x501, 0x31);
+    
+    for (;;) __asm__ volatile("hlt");
+}
+
 static void cmd_reboot(int argc, char **argv)
 {
     (void)argc;
@@ -601,6 +618,7 @@ static const command_t commands[] = {
     {"mkdir", cmd_mkdir},
     {"rm", cmd_rm},
     {"reboot", cmd_reboot},
+    {"shutdown", cmd_shutdown},
     {"ifconfig", cmd_ifconfig},
     {"ping", cmd_ping},
     {"arp", cmd_arp},
