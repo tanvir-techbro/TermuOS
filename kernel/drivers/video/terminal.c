@@ -113,8 +113,18 @@ static uint64_t _width, _height;
 static int      _cols, _rows;
 static int      _cx, _cy;
 static uint32_t _fg, _bg;
+static int      _cursor_enabled = 1;
+static int      _cursor_visible = 0;
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
+
+static void draw_cursor(int x, int y, uint32_t colour)
+{
+    // Draw a block cursor (8x2 at the bottom of the character cell)
+    for (int row = FONT_H - 2; row < FONT_H; row++)
+        for (int col = 0; col < FONT_W; col++)
+            fb_putpixel((uint64_t)(x + col), (uint64_t)(y + row), colour);
+}
 
 static void draw_char(int x, int y, char c, uint32_t fg, uint32_t bg)
 {
@@ -191,6 +201,12 @@ void terminal_set_bg(uint8_t r, uint8_t g, uint8_t b)
 
 void terminal_putchar(char c)
 {
+    // Erase cursor before moving or drawing
+    if (_cursor_visible) {
+        draw_cursor(_cx, _cy, _bg);
+        _cursor_visible = 0;
+    }
+
     if (c == '\r') {
         _cx = PADDING;
         return;
@@ -235,6 +251,13 @@ void terminal_putchar(char c)
 void terminal_puts(const char *s)
 {
     while (*s) terminal_putchar(*s++);
+}
+
+void terminal_cursor_tick(void)
+{
+    if (!_cursor_enabled) return;
+    _cursor_visible = !_cursor_visible;
+    draw_cursor(_cx, _cy, _cursor_visible ? _fg : _bg);
 }
 
 void terminal_set_size_from_current(void)
