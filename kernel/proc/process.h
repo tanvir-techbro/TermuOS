@@ -1,0 +1,32 @@
+#pragma once
+#include <stdint.h>
+#include <stddef.h>
+#include "../mm/vmm.h"
+
+#define MAX_PROCESSES 32
+#define MAX_HANDLES   16
+#define PROCESS_NAME_LEN 32
+
+typedef enum
+{
+  PROC_DEAD = 0,
+  PROC_RUNNING = 1,
+  PROC_ZOMBIE = 2,  
+} proc_state_t;
+
+typedef struct process
+{
+  uint32_t pid;
+  char name[PROCESS_NAME_LEN];
+  proc_state_t state;
+  pagemap_t pagemap;
+  int32_t exit_code;
+
+  void *handles[MAX_HANDLES];
+} process_t;
+
+void proc_init(void);
+process_t *proc_create(const char *name);
+void proc_exit(process_t *proc, int32_t code);
+process_t *proc_get(uint32_t pid);
+process_t *proc_kernel(void); // returns pid-0 kernel process

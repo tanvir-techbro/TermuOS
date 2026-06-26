@@ -20,6 +20,7 @@
 #include "drivers/net/virtio_net.h"
 #include "shell/shell.h"
 #include "lib/printf.h"
+#include "proc/process.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -110,6 +111,7 @@ void kernel_main(void)
     }
 
     kprintf("Starting Scheduler...\n");
+    proc_init();
     scheduler_init();
     pit_init(100);
 

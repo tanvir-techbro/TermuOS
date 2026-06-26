@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "../arch/x86_64/idt.h"
+#include "../proc/process.h"
 
 #define MAX_THREADS 64
 #define STACK_SIZE 16384 // 16 KB per thread
@@ -21,10 +22,11 @@ typedef struct thread
     uint64_t id;
     thread_state_t state;
     char name[32];
+    struct process *owner;
 } thread_t;
 
 void scheduler_init(void);
-thread_t *thread_create(const char *name, void(*entry)(void));
+thread_t *thread_create(const char *name, void(*entry)(void), process_t *owner);
 void thread_exit(void);
 void thread_block(void);
 void thread_unblock(thread_t *t);

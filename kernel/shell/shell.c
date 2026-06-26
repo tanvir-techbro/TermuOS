@@ -10,6 +10,7 @@
 #include "../fs/tfs.h"
 #include "../net/net.h"
 #include "../user/syscall.h"
+#include "../proc/process.h"
 #include "../lib/printf.h"
 #include "../lib/string.h"
 #include <stdint.h>
@@ -253,12 +254,17 @@ static void cmd_threads(int argc, char **argv)
     (void)argv;
     extern thread_t threads[MAX_THREADS];
     static const char *st[] = {"dead", "ready", "running", "blocked"};
-    kprintf("%-4s %-16s %s\n", "ID", "NAME", "STATE");
+    kprintf("ID  PID  STATE    NAME\n");
+    kprintf("--  ---  -------  ----------------\n");
     for (int i = 0; i < MAX_THREADS; i++)
     {
         if (threads[i].state == THREAD_DEAD)
             continue;
-        kprintf("%-4u %-16s %s\n", threads[i].id, threads[i].name, st[threads[i].state]);
+        kprintf("%u\t%u\t%s\t%s\n",
+            threads[i].id,
+            threads[i].owner ? threads[i].owner->pid : 0,
+            st[threads[i].state],
+            threads[i].name);
     }
 }
 

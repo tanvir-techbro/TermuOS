@@ -19,12 +19,13 @@ void scheduler_init(void)
     threads[0].state = THREAD_RUNNING;
     threads[0].stack_top = 0;
     __builtin_memcpy(threads[0].name, "idle", 5);
+    threads[0].owner = proc_kernel();
 
     current = 0;
     initialized = 1;
 }
 
-thread_t *thread_create(const char *name, void (*entry)(void))
+thread_t *thread_create(const char *name, void (*entry)(void), process_t *owner)
 {
     int slot = -1;
     for (int i = 1; i < MAX_THREADS; i++)
@@ -58,6 +59,7 @@ thread_t *thread_create(const char *name, void (*entry)(void))
         i++;
     }
     t->name[i] = '\0';
+    t->owner = owner ? owner : proc_kernel();
 
     uint64_t *sp = (uint64_t *)t->stack_top;
     *--sp = (uint64_t)thread_exit;
@@ -129,6 +131,9 @@ void scheduler_yield(void)
         threads[prev].state = THREAD_READY;
     threads[next].state = THREAD_RUNNING;
     current = next;
+    // switch address space if process changed
+    if (threads[prev].owner != threads[next].owner)
+        vmm_switch(threads[next].owner->pagemap);
 
     __asm__ volatile("sti");
     context_switch(&threads[prev].rsp, threads[next].rsp);

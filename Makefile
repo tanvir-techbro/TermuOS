@@ -33,6 +33,8 @@ SRCS += \
        kernel/drivers/input/mouse.c \
        kernel/sched/scheduler.c
 
+SRCS += kernel/proc/process.c
+
 SRCS += \
        kernel/drivers/video/fb.c \
        kernel/drivers/video/terminal.c
