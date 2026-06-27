@@ -1,6 +1,7 @@
 #include "scheduler.h"
 #include "../mm/heap.h"
 #include "../lib/printf.h"
+#include "../ob/object.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -20,6 +21,9 @@ void scheduler_init(void)
     threads[0].stack_top = 0;
     __builtin_memcpy(threads[0].name, "idle", 5);
     threads[0].owner = proc_kernel();
+    ob_mkdir("\\Thread");
+    threads[0].ob_header = ob_create(&ObTypeThread, "0", &threads[0]);
+    ob_insert("\\Thread\\0", threads[0].ob_header);
 
     current = 0;
     initialized = 1;
@@ -73,6 +77,22 @@ thread_t *thread_create(const char *name, void (*entry)(void), process_t *owner)
     t->rsp = (uint64_t)sp;
 
     kprintf("Scheduler: created thread %d '%s'\n", slot, t->name);
+    char ob_path[32];
+    const char *prefix = "\\Thread\\";
+    int pi = 0;
+    while (prefix[pi]) { ob_path[pi] = prefix[pi]; pi++; }
+    uint64_t id_tmp = t->id;
+    if (id_tmp == 0) { ob_path[pi++] = '0'; }
+    else
+    {
+        char tmp[16]; int ti = 0;
+        while (id_tmp) { tmp[ti++] = '0' + (id_tmp % 10); id_tmp /= 10; }
+        while (ti > 0) ob_path[pi++] = tmp[--ti];
+    }
+    ob_path[pi] = '\0';
+
+    t->ob_header = ob_create(&ObTypeThread, ob_path, t);
+    ob_insert(ob_path, t->ob_header);
     return t;
 }
 

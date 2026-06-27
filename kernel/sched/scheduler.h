@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "../arch/x86_64/idt.h"
 #include "../proc/process.h"
+#include "../ob/object.h"
 
 #define MAX_THREADS 64
 #define STACK_SIZE 16384 // 16 KB per thread
@@ -22,6 +23,7 @@ typedef struct thread
     uint64_t id;
     thread_state_t state;
     char name[32];
+    object_header_t *ob_header;
     struct process *owner;
 } thread_t;
 
