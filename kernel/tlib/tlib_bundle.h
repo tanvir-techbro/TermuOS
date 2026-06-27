@@ -83,3 +83,9 @@ int tlib_bundle_load(const char *bundle_path, tlib_app_t *out);
 
 // Pretty-print a manifest to the kernel console (for debugging).
 void tlib_manifest_dump(const tlib_manifest_t *m);
+
+// Launch a loaded .tapp bundle as a new process.
+// `app` must have been successfully passed through tlib_bundle_load() first.
+// Switches to the new process's pagemap and jumps to userspace.
+// Does not return on success.  Returns -1 if launch fails.
+int tlib_bundle_launch(tlib_app_t *app);

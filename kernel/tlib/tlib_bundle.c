@@ -268,8 +268,8 @@ int tlib_bundle_load(const char *bundle_path, tlib_app_t *out)
   }
   if (msize == 0 || msize > 4096)
   {
-    kprintf("tlib: manifest.json has invalid size (%llu bytes)\n",
-            (unsigned long long)msize);
+    kprintf("tlib: manifest.json has invalid size (%u bytes)\n",
+            (uint32_t)msize);
     return -1;
   }
 

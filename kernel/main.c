@@ -24,6 +24,9 @@
 #include "ob/object.h"
 #include "io/ioman.h"
 #include "ipc/port.h"
+#include "tlib/test/hello_bin.h"
+#include "tlib/tlib_bundle.h"
+#include "tlib/exec.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -127,6 +130,29 @@ void kernel_main(void)
 
     pci_init();
     virtio_net_init();
+
+    // create bundle structure
+    vfs_mkdir("/mnt/Hello.tapp");
+    vfs_mkdir("/mnt/Hello.tapp/bin");
+
+    const char *manifest =
+        "{\"name\":\"Hello\",\"bundle_id\":\"com.test.hello\","
+        "\"version\":\"1.0\",\"entry\":\"bin/hello\","
+        "\"permissions\":[\"ipc.send\"],\"ports\":[\"Hello.main\"]}";
+    int tfd = vfs_open("/mnt/Hello.tapp/manifest.json", O_WRONLY | O_CREAT);
+    vfs_write(tfd, manifest, 138);
+    vfs_close(tfd);
+
+    tfd = vfs_open("/mnt/Hello.tapp/bin/hello", O_WRONLY | O_CREAT);
+    vfs_write(tfd, hello, hello_len);
+    vfs_close(tfd);
+
+    tlib_app_t app;
+    if (tlib_bundle_load("/mnt/Hello.tapp", &app) == 0)
+    {
+        tlib_manifest_dump(&app.manifest);
+        tlib_bundle_launch(&app);
+    }
 
     shell_run();
 }
