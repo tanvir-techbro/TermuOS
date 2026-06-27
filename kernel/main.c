@@ -22,6 +22,7 @@
 #include "lib/printf.h"
 #include "proc/process.h"
 #include "ob/object.h"
+#include "io/ioman.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -101,6 +102,17 @@ void kernel_main(void)
     }
 
     ata_init();
+
+    kprintf("Starting Scheduler...\n");
+    ob_init();
+    ioman_init();
+    proc_init();
+    scheduler_init();
+    pit_init(100);
+
+    ata_ioman_register();
+    keyboard_ioman_register();
+
     if (tfs_mount() == 0)
     {
         vfs_mount("/mnt", tfs_get_root());
@@ -110,12 +122,6 @@ void kernel_main(void)
     {
         kprintf("tfs: no disk or unformatted — run 'mkfs' to format\n");
     }
-
-    kprintf("Starting Scheduler...\n");
-    ob_init();
-    proc_init();
-    scheduler_init();
-    pit_init(100);
 
     pci_init();
     virtio_net_init();
