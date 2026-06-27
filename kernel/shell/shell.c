@@ -14,6 +14,7 @@
 #include "../ob/object.h"
 #include "../lib/printf.h"
 #include "../lib/string.h"
+#include "../ipc/port.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
@@ -609,6 +610,27 @@ static void cmd_obdir(int argc, char **argv)
     ob_list(path);
 }
 
+static void cmd_porttest(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+
+    port_t *p = port_create("test");
+    if (!p) { kprintf("porttest: failed to create port\n"); return; }
+
+    const char *msg = "hello from shell";
+    port_send(p, 42, (void *)msg, 17);
+
+    ipc_message_t m;
+    if (port_receive(p, &m) == 0)
+    {
+        kprintf("porttest: received code=%u data='%s' from pid=%u\n",
+                m.code, (char *)m.data, m.sender_pid);
+        if (m.data) kfree(m.data);
+    }
+
+    port_destroy(p);
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -643,6 +665,7 @@ static const command_t commands[] = {
     {"exec", cmd_exec},
     {"mkfs", cmd_mkfs},
     {"obdir", cmd_obdir},
+    {"porttest", cmd_porttest},
     {NULL, NULL}};
 
 static void dispatch(char *line)

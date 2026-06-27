@@ -40,6 +40,7 @@ SRCS += kernel/ob/object.c
 SRCS += kernel/io/ioman.c
 SRCS += kernel/drivers/storage/ata_ioman.c
 SRCS += kernel/drivers/input/keyboard_ioman.c
+SRCS += kernel/ipc/port.c
 
 SRCS += \
        kernel/drivers/video/fb.c \

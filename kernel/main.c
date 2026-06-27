@@ -23,6 +23,7 @@
 #include "proc/process.h"
 #include "ob/object.h"
 #include "io/ioman.h"
+#include "ipc/port.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -106,6 +107,7 @@ void kernel_main(void)
     kprintf("Starting Scheduler...\n");
     ob_init();
     ioman_init();
+    ipc_init();
     proc_init();
     scheduler_init();
     pit_init(100);
