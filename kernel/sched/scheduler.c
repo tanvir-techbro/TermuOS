@@ -139,9 +139,24 @@ void scheduler_yield(void)
     context_switch(&threads[prev].rsp, threads[next].rsp);
 }
 
-// Called from PIT IRQ — only switch away from idle thread
 void scheduler_tick(registers_t *r)
 {
     (void)r;
-    // Shell runs in main thread — no preemption needed
+    if (!initialized) return;
+
+    int next = next_thread();
+    if (next < 0) return; // nothing to switch to
+    if (next == current) return; // already the best choice
+
+    int prev = current;
+    if (threads[prev].state == THREAD_RUNNING)
+        threads[prev].state = THREAD_READY;
+    threads[next].state = THREAD_RUNNING;
+    current = next;
+
+    uint64_t new_cr3 = 0;
+    if (threads[prev].owner != threads[next].owner)
+        new_cr3 = threads[next].owner->pagemap;
+
+    preempt_switch(&threads[prev].rsp, threads[next].rsp, new_cr3);
 }

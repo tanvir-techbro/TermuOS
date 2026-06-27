@@ -33,3 +33,4 @@ void thread_unblock(thread_t *t);
 thread_t *thread_current(void);
 void scheduler_tick(registers_t *r);
 void scheduler_yield(void);
+void preempt_switch(uint64_t *old_rsp, uint64_t new_rsp, uint64_t new_cr3);
