@@ -11,6 +11,7 @@
 #include "../net/net.h"
 #include "../user/syscall.h"
 #include "../proc/process.h"
+#include "../ob/object.h"
 #include "../lib/printf.h"
 #include "../lib/string.h"
 #include <stdint.h>
@@ -197,6 +198,7 @@ static void cmd_help(int argc, char **argv)
     kprintf("          ls cd pwd cat write touch mkdir rm reboot shutdown\n");
     kprintf("          exec\n");
     kprintf("          ifconfig ping arp\n");
+    kprintf("          obdir\n");
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -600,6 +602,13 @@ static void cmd_update(int argc, char **argv)
     outb(0x64, 0xFE); // PS/2 reset
 }
 
+// ─── Object ─────────────────────────────────────────────────────────────────
+static void cmd_obdir(int argc, char **argv)
+{
+    const char *path = (argc >= 2) ? argv[1] : "\\";
+    ob_list(path);
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -633,6 +642,7 @@ static const command_t commands[] = {
     {"yield", cmd_yield},
     {"exec", cmd_exec},
     {"mkfs", cmd_mkfs},
+    {"obdir", cmd_obdir},
     {NULL, NULL}};
 
 static void dispatch(char *line)

@@ -2,6 +2,7 @@
 #include "../mm/vmm.h"
 #include "../mm/heap.h"
 #include "../lib/printf.h"
+#include "../ob/object.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -26,10 +27,6 @@ void proc_init(void)
   __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
   kproc->pagemap = cr3;
 
-  // zero handle table
-  for (int i = 0; i < MAX_HANDLES; i++)
-    kproc->handles[i] = NULL;
-
   int n = 0;
   const char *kname = "kernel";
   while (kname[n] && n < PROCESS_NAME_LEN - 1)
@@ -40,6 +37,10 @@ void proc_init(void)
 
   next_pid = 1;
   kprintf("proc: kernel process created (pid 0)\n");
+  handle_table_init(&kproc->handles);
+  kproc->ob_header = ob_create(&ObTypeProcess, "kernel", kproc);
+  ob_mkdir("\\Process");
+  ob_insert("\\Process\\0", kproc->ob_header);
 }
 
 process_t *proc_create(const char *name) 
@@ -62,8 +63,24 @@ process_t *proc_create(const char *name)
   p->exit_code = 0;
   p->pagemap = vmm_new_pagemap();
 
-  for (int i = 0; i < MAX_HANDLES; i++)
-    p->handles[i] = NULL;
+  handle_table_init(&p->handles);
+
+  char ob_path[32];
+  const char *prefix = "\\Process\\";
+  int pi = 0;
+  while (prefix[pi]) { ob_path[pi] = prefix[pi]; pi++; }
+  uint32_t pid_tmp = p->pid;
+  if (pid_tmp == 0) { ob_path[pi++] = '0'; }
+  else
+  {
+    char tmp[16]; int ti = 0;
+    while (pid_tmp) { tmp[ti++] = '0' + (pid_tmp % 10); pid_tmp /= 10; }
+    while (ti > 0) ob_path[pi++] = tmp[--ti];
+  }
+  ob_path[pi] = '\0';
+
+  p->ob_header = ob_create(&ObTypeProcess, ob_path, p);
+  ob_insert(ob_path, p->ob_header);
 
   int n = 0;
   while (name[n] && n < PROCESS_NAME_LEN - 1)

@@ -35,6 +35,8 @@ SRCS += \
 
 SRCS += kernel/proc/process.c
 
+SRCS += kernel/ob/object.c
+
 SRCS += \
        kernel/drivers/video/fb.c \
        kernel/drivers/video/terminal.c

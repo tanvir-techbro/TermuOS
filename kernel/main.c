@@ -21,6 +21,7 @@
 #include "shell/shell.h"
 #include "lib/printf.h"
 #include "proc/process.h"
+#include "ob/object.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -111,6 +112,7 @@ void kernel_main(void)
     }
 
     kprintf("Starting Scheduler...\n");
+    ob_init();
     proc_init();
     scheduler_init();
     pit_init(100);

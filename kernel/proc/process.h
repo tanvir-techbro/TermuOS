@@ -2,9 +2,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "../mm/vmm.h"
+#include "../ob/object.h"
 
 #define MAX_PROCESSES 32
-#define MAX_HANDLES   16
 #define PROCESS_NAME_LEN 32
 
 typedef enum
@@ -22,7 +22,8 @@ typedef struct process
   pagemap_t pagemap;
   int32_t exit_code;
 
-  void *handles[MAX_HANDLES];
+  handle_table_t handles;
+  object_header_t *ob_header;
 } process_t;
 
 void proc_init(void);
