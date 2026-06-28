@@ -154,5 +154,11 @@ void kernel_main(void)
         tlib_bundle_launch(&app);
     }
 
-    shell_run();
+    // run shell on own thread
+    thread_t *shell_thread = thread_create("shell", shell_thread_entry, proc_kernel());
+    if (!shell_thread)
+        kprintf("kernel: failed to create shell thread\n");
+
+    scheduler_yield();
+    for (;;) __asm__ volatile("hlt");
 }

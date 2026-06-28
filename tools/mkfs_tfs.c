@@ -38,7 +38,7 @@ typedef struct
     uint32_t free_blocks;
     uint32_t total_inodes;
     uint32_t free_inodes;
-    uint8_t _pad[492];
+    uint8_t _pad[488];
 } __attribute__((packed)) tfs_super_t;
 
 typedef struct
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     const char *path = argc > 1 ? argv[1] : "disk.img";
     int size_mb = argc > 2 ? atoi(argv[2]) : 64;
 
-    img = fopen(path, "wb");
+    img = fopen(path, "w+b");
     if (!img)
     {
         perror("open");

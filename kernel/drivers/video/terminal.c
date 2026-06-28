@@ -158,7 +158,7 @@ static void scroll_up(void)
 
     uint8_t *base = (uint8_t *)fb->address;
 
-    for (int y = PADDING; y < bot - line; y++) {
+    for (int y = PADDING; y < bot - line + 1; y++) {
         uint32_t *dst = (uint32_t *)(base + (uint64_t)y        * fb->pitch);
         uint32_t *src = (uint32_t *)(base + (uint64_t)(y+line) * fb->pitch);
         for (uint64_t x = 0; x < fb->width; x++)
@@ -215,7 +215,7 @@ void terminal_putchar(char c)
     if (c == '\n') {
         _cx  = PADDING;
         _cy += FONT_H;
-        if (_cy + FONT_H > (int)_height - PADDING) {
+        if (_cy + FONT_H >= (int)_height - PADDING) {
             scroll_up();
             _cy -= FONT_H;
         }
@@ -241,7 +241,7 @@ void terminal_putchar(char c)
     if (_cx + FONT_W > (int)_width - PADDING) {
         _cx  = PADDING;
         _cy += FONT_H;
-        if (_cy + FONT_H > (int)_height - PADDING) {
+        if (_cy + FONT_H >= (int)_height - PADDING) {
             scroll_up();
             _cy -= FONT_H;
         }

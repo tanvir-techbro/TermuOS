@@ -696,3 +696,9 @@ void shell_run_command(const char *line)
     buf[i] = '\0';
     dispatch(buf);
 }
+
+void shell_thread_entry(void)
+{
+    shell_run();
+    thread_exit();
+}
