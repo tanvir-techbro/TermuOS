@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "../mm/vmm.h"
 
 // ── tlib: application bundle loader ─────────────────────────────────────────
 //
@@ -68,6 +69,15 @@ typedef struct
   char            entry_path[256];          // bundle_path + "/" + manifest.entry
   int             loaded;                   // 1 after tlib_bundle_load() succeeds
 } tlib_app_t;
+
+// internal - one per launched app, lives in kernel heap
+typedef struct
+{
+  uint64_t entry;
+  uint64_t stack_top;
+  pagemap_t pagemap;
+  uint32_t perm_mask;
+} tlib_launch_ctx_t;
 
 // ── API ──────────────────────────────────────────────────────────────────────
 

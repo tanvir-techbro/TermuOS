@@ -2,6 +2,8 @@
 #include "exec.h"
 #include "../proc/process.h"
 #include "../mm/vmm.h"
+#include "../mm/heap.h"
+#include "../sched/scheduler.h"
 #include "../user/userspace.h"
 #include "../ipc/port.h"
 #include "../lib/printf.h"
@@ -30,6 +32,21 @@ static void tl_build_path(char *dst, int max,
   while (suffix[j] && i < max - 1)
     dst[i++] = suffix[j++];
   dst[i] = '\0';
+}
+
+static void tlib_app_thread_entry(void)
+{
+  // retrieve context stored in thread's owner process ob header body
+  thread_t *self = thread_current();
+  tlib_launch_ctx_t *ctx = (tlib_launch_ctx_t *)self->owner->ob_header->body;
+
+  tlib_set_perm_mask(ctx->perm_mask);
+  vmm_switch(ctx->pagemap);
+  jump_userspace(ctx->entry, ctx->stack_top);
+
+  // should never return
+  kprintf("tlib: thread entry returned\n");
+  thread_exit();
 }
 
 int tlib_bundle_launch(tlib_app_t *app)
@@ -106,14 +123,27 @@ int tlib_bundle_launch(tlib_app_t *app)
   }
 
   // ── 4. switch pagemap and jump ────────────────────────────────────────────
-  kprintf("tlib: launching '%s' (pid %u) entry=0x%x\n",
-          m->name, proc->pid, (uint32_t)entry);
+  tlib_launch_ctx_t *ctx = (tlib_launch_ctx_t *)kmalloc(sizeof(tlib_launch_ctx_t));
+  if (!ctx) { kprintf("tlib: OOM allocating lauch ctx\n"); proc_exit(proc, -1); return -1; }
 
-  tlib_set_perm_mask(m->perm_mask);
-  vmm_switch(proc->pagemap);
-  jump_userspace(entry, EXEC_USER_STACK_TOP);
+  ctx->entry = entry;
+  ctx->stack_top = EXEC_USER_STACK_TOP;
+  ctx->pagemap = proc->pagemap;
+  ctx->perm_mask = m->perm_mask;
 
-  // jump_userspace does not return on success
-  kprintf("tlib: jump_userspace returned — launch failed\n");
-  return -1;
+  // stash ctx in the process ob body so the thread entry can find it
+  proc->ob_header->body = ctx;
+
+  thread_t *t = thread_create(m->name, tlib_app_thread_entry, proc);
+  if (!t)
+  {
+    kprintf("tlib: failed to create thread for '%s'\n", m->name);
+    kfree(ctx);
+    proc_exit(proc, -1);
+    return -1;
+  }
+
+  kprintf("tlib: scheduled '%s' (pid %u, tid %u)\n", m->name, proc->pid, (uint32_t)t->id);
+  return 0;
+  // caller returns normally - scheduler picks up the new thread on next tick
 }
