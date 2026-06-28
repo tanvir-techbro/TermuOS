@@ -27,8 +27,8 @@ object_type_t ObTypePort = { "Port", port_delete_cb };
 
 // pool
 #define MAX_PORTS 32
-static port_t port_pool[MAX_PORTS];
-static uint8_t port_used[MAX_PORTS];
+port_t port_pool[MAX_PORTS];
+uint8_t port_used[MAX_PORTS];
 
 // init
 void ipc_init(void)

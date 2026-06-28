@@ -5,6 +5,7 @@
 #include "../fs/vfs.h"
 #include "../mm/pmm.h"
 #include "../mm/vmm.h"
+#include "../ipc/port.h"
 #include "../tlib/tlib_bundle.h"
 #include "../lib/printf.h"
 #include <stdint.h>
@@ -275,6 +276,55 @@ static uint64_t sys_uptime(void)
     return timer_ticks;
 }
 
+// Returns port pool index (>=0) or -1 if not found.
+static uint64_t sys_port_find(uint64_t name_addr)
+{
+    const char *name = (const char *)name_addr;
+    port_t *p = port_find(name);
+    if (!p) return (uint64_t)-1;
+
+    // find its index in the pool (exposed in port.c as extern)
+    extern port_t port_pool[];
+    return (uint64_t)(p - port_pool);
+}
+
+static uint64_t sys_port_send(uint64_t idx, uint64_t code,
+                               uint64_t data_addr, uint64_t length)
+{
+    if (!tlib_check_perm(TLIB_PERM_IPC_SEND)) return (uint64_t)-1;
+
+    extern port_t port_pool[];
+    extern uint8_t port_used[];
+    if (idx >= 32 || !port_used[idx]) return (uint64_t)-1;
+
+    return (uint64_t)port_send(&port_pool[idx], (uint32_t)code,
+                                (void *)data_addr, (uint32_t)length);
+}
+
+// out_addr points to a userspace ipc_message_t.
+// We only copy code, sender_pid, length — not the kernel heap pointer.
+static uint64_t sys_port_receive(uint64_t idx, uint64_t out_addr)
+{
+    if (!tlib_check_perm(TLIB_PERM_IPC_RECEIVE)) return (uint64_t)-1;
+
+    extern port_t port_pool[];
+    extern uint8_t port_used[];
+    if (idx >= 32 || !port_used[idx]) return (uint64_t)-1;
+
+    ipc_message_t msg;
+    int r = port_receive(&port_pool[idx], &msg);
+    if (r != 0) return (uint64_t)-1;
+
+    // write safe fields to userspace
+    ipc_message_t *out = (ipc_message_t *)out_addr;
+    out->sender_pid = msg.sender_pid;
+    out->code       = msg.code;
+    out->length     = msg.length;
+    out->data       = NULL; // never expose kernel heap pointer to userspace
+
+    return 0;
+}
+
 /* ── dispatch ────────────────────────────────────────────────────────────── */
 
 uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f)
@@ -294,6 +344,9 @@ uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c, uint
     case SYS_SLEEP:   return sys_sleep(a);
     case SYS_EXIT:    return sys_exit(a);
     case SYS_UPTIME:  return sys_uptime();
+    case SYS_PORT_FIND: return sys_port_find(a);
+    case SYS_PORT_SEND: return sys_port_send(a, b, c, d);
+    case SYS_PORT_RECEIVE: return sys_port_receive(a, b);
     default:
         kprintf("[kernel] unknown syscall %llu\n", num);
         return (uint64_t)-1;

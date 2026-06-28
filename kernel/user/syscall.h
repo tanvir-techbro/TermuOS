@@ -18,6 +18,9 @@
 #define SYS_YIELD       24   /* sched_yield */
 #define SYS_SLEEP       35   /* nanosleep */
 #define SYS_UPTIME      201  /* custom — unused by musl */
+#define SYS_PORT_FIND   300
+#define SYS_PORT_SEND   301
+#define SYS_PORT_RECEIVE 302
 
 void     syscall_init(void);
 uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c,

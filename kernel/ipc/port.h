@@ -36,6 +36,9 @@ typedef struct port
   ipc_message_t pending;
 } port_t;
 
+extern port_t   port_pool[32];
+extern uint8_t  port_used[32];
+
 // API
 void ipc_init(void);
 port_t *port_create(const char *name);
