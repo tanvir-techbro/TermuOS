@@ -342,3 +342,19 @@ void tlib_manifest_dump(const tlib_manifest_t *m)
     kprintf("    - %s\n", m->ports[i]);
   kprintf("─────────────────────────────────────\n");
 }
+
+static uint32_t current_perm_mask = 0xffffffff; // kernel: all perms
+
+void tlib_set_perm_mask(uint32_t mask)
+{
+  current_perm_mask = mask;
+}
+
+int tlib_check_perm(uint32_t perm)
+{
+  if (current_perm_mask == 0xffffffff) return 1; // kernel process
+  if (current_perm_mask & perm) return 1;
+  kprintf("tlib: permission denied (needed 0x%x, have 0x%x)\n", perm, current_perm_mask);
+  return 0;
+}
+

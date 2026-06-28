@@ -5,6 +5,7 @@
 #include "../fs/vfs.h"
 #include "../mm/pmm.h"
 #include "../mm/vmm.h"
+#include "../tlib/tlib_bundle.h"
 #include "../lib/printf.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -219,24 +220,29 @@ static uint64_t sys_exit(uint64_t code)
 
 static uint64_t sys_write(uint64_t fd, uint64_t buf_addr, uint64_t len)
 {
-    if (fd == 1 || fd == 2)
+    if (fd == 1 || fd == 2)  // stdout/stderr always allowed
     {
         const char *buf = (const char *)buf_addr;
         for (uint64_t i = 0; i < len; i++)
             terminal_putchar(buf[i]);
         return len;
     }
+    if (!tlib_check_perm(TLIB_PERM_FS_WRITE)) return (uint64_t)-1;
     return (uint64_t)vfs_write((int)fd, (const void *)buf_addr, (size_t)len);
 }
 
 static uint64_t sys_read(uint64_t fd, uint64_t buf, uint64_t len)
 {
+    if (!tlib_check_perm(TLIB_PERM_FS_READ)) return (uint64_t)-1;
     return (uint64_t)vfs_read((int)fd, (void *)buf, (size_t)len);
 }
 
 static uint64_t sys_open(uint64_t path, uint64_t flags, uint64_t mode)
 {
     (void)mode;
+    uint32_t need = (flags & O_WRONLY || flags & O_RDWR)
+                     ? TLIB_PERM_FS_WRITE : TLIB_PERM_FS_READ;
+    if (!tlib_check_perm(need)) return (uint64_t)-1;
     return (uint64_t)vfs_open((const char *)path, (uint32_t)flags);
 }
 

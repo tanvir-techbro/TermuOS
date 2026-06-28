@@ -89,3 +89,10 @@ void tlib_manifest_dump(const tlib_manifest_t *m);
 // Switches to the new process's pagemap and jumps to userspace.
 // Does not return on success.  Returns -1 if launch fails.
 int tlib_bundle_launch(tlib_app_t *app);
+
+// Permission check - call from syscall handlers
+// returns 1 if the current process has the permission, 0 if denied
+int tlib_check_perm(uint32_t perm);
+
+// set the active permission mask (called by tlib_bundle_launch)
+void tlib_set_perm_mask(uint32_t mask);

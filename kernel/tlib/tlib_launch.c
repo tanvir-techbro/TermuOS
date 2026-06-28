@@ -109,6 +109,7 @@ int tlib_bundle_launch(tlib_app_t *app)
   kprintf("tlib: launching '%s' (pid %u) entry=0x%x\n",
           m->name, proc->pid, (uint32_t)entry);
 
+  tlib_set_perm_mask(m->perm_mask);
   vmm_switch(proc->pagemap);
   jump_userspace(entry, EXEC_USER_STACK_TOP);
 
