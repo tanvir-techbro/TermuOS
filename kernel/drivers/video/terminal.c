@@ -235,6 +235,13 @@ void terminal_putchar(char c)
         return;
     }
 
+    if (c == '\f') {
+        fb_clear(_bg);
+        _cx = PADDING;
+        _cy = PADDING;
+        goto redraw_cursor;
+    }
+
     draw_char(_cx, _cy, c, _fg, _bg);
     _cx += FONT_W;
 
@@ -245,6 +252,12 @@ void terminal_putchar(char c)
             scroll_up();
             _cy -= FONT_H;
         }
+    }
+
+redraw_cursor:
+    if (_cursor_enabled) {
+        draw_cursor(_cx, _cy, _fg);
+        _cursor_visible = 1;
     }
 }
 
