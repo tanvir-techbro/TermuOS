@@ -21,6 +21,7 @@
 #define SYS_PORT_FIND   300
 #define SYS_PORT_SEND   301
 #define SYS_PORT_RECEIVE 302
+#define SYS_PORT_CREATE 303
 
 void     syscall_init(void);
 uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c,

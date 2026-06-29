@@ -5,6 +5,7 @@
 #include "drivers/video/fb.h"
 #include "drivers/video/terminal.h"
 #include "drivers/input/keyboard.h"
+#include "drivers/input/mouse.h"
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/gdt.h"
 #include "arch/x86_64/pit.h"
@@ -27,6 +28,7 @@
 #include "tlib/test/hello_bin.h"
 #include "tlib/tlib_bundle.h"
 #include "tlib/exec.h"
+#include "gui/wm.h"
 
 LIMINE_BASE_REVISION(3);
 
@@ -113,6 +115,7 @@ void kernel_main(void)
     ipc_init();
     proc_init();
     scheduler_init();
+    mouse_init();
     pit_init(100);
 
     ata_ioman_register();
@@ -153,6 +156,10 @@ void kernel_main(void)
         tlib_manifest_dump(&app.manifest);
         tlib_bundle_launch(&app);
     }
+
+    thread_t *wm_thread = thread_create("wm", wm_thread_entry, proc_kernel());
+    if (!wm_thread)
+        kprintf("kernel: failed to create wm thread\n");
 
     // run shell on own thread
     thread_t *shell_thread = thread_create("shell", shell_thread_entry, proc_kernel());
