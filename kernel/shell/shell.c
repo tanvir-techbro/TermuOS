@@ -11,6 +11,7 @@
 #include "../net/net.h"
 #include "../user/syscall.h"
 #include "../proc/process.h"
+#include "../tlib/tlib_bundle.h"
 #include "../ob/object.h"
 #include "../lib/printf.h"
 #include "../lib/string.h"
@@ -609,6 +610,62 @@ static void cmd_obdir(int argc, char **argv)
     ob_list(path);
 }
 
+static void cmd_run(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        kprintf("run: usage: run <path/to/App.tapp>\n");
+        return;
+    }
+
+    static char path[VFS_PATH_MAX];
+    resolve_path(argv[1], path, VFS_PATH_MAX);
+
+    int plen = sh_strlen(path);
+    int has_ext = (plen > 5 &&
+                   path[plen-5] == '.' &&
+                   path[plen-4] == 't' &&
+                   path[plen-3] == 'a' &&
+                   path[plen-2] == 'p' &&
+                   path[plen-1] == 'p');
+    if (!has_ext && plen + 5 < VFS_PATH_MAX)
+    {
+        path[plen+0] = '.';
+        path[plen+1] = 't';
+        path[plen+2] = 'a';
+        path[plen+3] = 'p';
+        path[plen+4] = 'p';
+        path[plen+5] = '\0';
+    }
+
+    // check exists
+    uint32_t type;
+    if (vfs_stat(path, &type, NULL) < 0)
+    {
+        kprintf("run: %s: not found\n", path);
+        return;
+    }
+    if (type != VFS_DIR)
+    {
+        kprintf("run: %s: not a .tapp bundle (expected a directory)\n", path);
+        return;
+    }
+
+    // load and launch
+    static tlib_app_t app;
+    if (tlib_bundle_load(path, &app) < 0)
+    {
+        kprintf("run: failed to load bundle %s\n", path);
+        return;
+    }
+    kprintf("run: launching %s v%s\n", app.manifest.name, app.manifest.version);
+    if (tlib_bundle_launch(&app) < 0)
+    {
+        kprintf("run: launch failed\n");
+    }
+    // returns immediatly; new thread is scheduled independently
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 typedef struct
@@ -643,6 +700,7 @@ static const command_t commands[] = {
     {"exec", cmd_exec},
     {"mkfs", cmd_mkfs},
     {"obdir", cmd_obdir},
+    {"run", cmd_run},
     {NULL, NULL}};
 
 static void dispatch(char *line)

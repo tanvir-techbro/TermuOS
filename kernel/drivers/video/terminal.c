@@ -7,6 +7,9 @@
 #define FONT_W    8
 #define FONT_H    16
 
+static uint64_t term_offset_x = 0;
+static uint64_t term_offset_y = 0;
+
 // ─── Embedded 8x16 font (PC BIOS / VGA font, printable ASCII 32–126) ─────────
 
 static const uint8_t _font[95][16] = {
@@ -117,16 +120,20 @@ static int      _cursor_enabled = 1;
 static int      _cursor_visible = 0;
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
+// All coordinates are relative to the terminal area.
+// term_offset_x/y are added here to get screen coordinates.
 
-static void draw_cursor(int x, int y, uint32_t colour)
+static void draw_cursor(int px, int py, uint32_t colour)
 {
-    // Draw a block cursor (8x2 at the bottom of the character cell)
+    // 8x2 block cursor at the bottom of the cell
     for (int row = FONT_H - 2; row < FONT_H; row++)
         for (int col = 0; col < FONT_W; col++)
-            fb_putpixel((uint64_t)(x + col), (uint64_t)(y + row), colour);
+            fb_putpixel((int)(px + col + term_offset_x),
+                        (int)(py + row + term_offset_y),
+                        colour);
 }
 
-static void draw_char(int x, int y, char c, uint32_t fg, uint32_t bg)
+static void draw_char(int px, int py, char c, uint32_t fg, uint32_t bg)
 {
     if (c < 32 || c > 126) c = '?';
     const uint8_t *glyph = _font[(unsigned char)c - 32];
@@ -134,41 +141,69 @@ static void draw_char(int x, int y, char c, uint32_t fg, uint32_t bg)
         uint8_t bits = glyph[row];
         for (int col = 0; col < FONT_W; col++) {
             uint32_t colour = (bits & (0x80 >> col)) ? fg : bg;
-            fb_putpixel((uint64_t)(x + col), (uint64_t)(y + row), colour);
+            fb_putpixel((int)(px + col + term_offset_x),
+                        (int)(py + row + term_offset_y),
+                        colour);
         }
     }
 }
 
-static void fill_rect(int x, int y, int w, int h, uint32_t colour)
+static void fill_rect(int px, int py, int w, int h, uint32_t colour)
 {
     for (int row = 0; row < h; row++)
         for (int col = 0; col < w; col++)
-            fb_putpixel((uint64_t)(x + col), (uint64_t)(y + row), colour);
+            fb_putpixel((int)(px + col + term_offset_x),
+                        (int)(py + row + term_offset_y),
+                        colour);
 }
 
 // ─── Scroll ───────────────────────────────────────────────────────────────────
+// Scrolls only the terminal area (respects term_offset_y).
 
 static void scroll_up(void)
 {
     struct limine_framebuffer *fb = fb_get();
     if (!fb) return;
 
-    int line = FONT_H;
-    int bot  = (int)fb->height - PADDING;
+    int line    = FONT_H;
+    int top     = (int)term_offset_y + PADDING;
+    int bot     = (int)term_offset_y + (int)_height - PADDING;
+    int fb_w    = (int)fb->width;
 
     uint8_t *base = (uint8_t *)fb->address;
 
-    for (int y = PADDING; y < bot - line + 1; y++) {
+    // Shift rows up by one line within the terminal area
+    for (int y = top; y < bot - line; y++) {
         uint32_t *dst = (uint32_t *)(base + (uint64_t)y        * fb->pitch);
         uint32_t *src = (uint32_t *)(base + (uint64_t)(y+line) * fb->pitch);
-        for (uint64_t x = 0; x < fb->width; x++)
+        for (int x = (int)term_offset_x;
+             x < (int)term_offset_x + fb_w; x++)
             dst[x] = src[x];
     }
 
-    fill_rect(0, bot - line, (int)fb->width, line, _bg);
+    // Clear the last line
+    for (int y = bot - line; y < bot; y++) {
+        uint32_t *row = (uint32_t *)(base + (uint64_t)y * fb->pitch);
+        for (int x = (int)term_offset_x;
+             x < (int)term_offset_x + fb_w; x++)
+            row[x] = _bg;
+    }
+}
+
+// ─── Clear terminal area only ─────────────────────────────────────────────────
+
+static void clear_terminal_area(void)
+{
+    fill_rect(0, 0, (int)_width, (int)_height, _bg);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+
+void terminal_set_offset(uint64_t x, uint64_t y)
+{
+    term_offset_x = x;
+    term_offset_y = y;
+}
 
 void terminal_init(void)
 {
@@ -194,14 +229,15 @@ void terminal_set_fg(uint8_t r, uint8_t g, uint8_t b)
 void terminal_set_bg(uint8_t r, uint8_t g, uint8_t b)
 {
     _bg = fb_colour(r, g, b);
-    fb_clear(_bg);
+    /* Only clear the terminal area, not the whole screen */
+    clear_terminal_area();
     _cx = PADDING;
     _cy = PADDING;
 }
 
 void terminal_putchar(char c)
 {
-    // Erase cursor before moving or drawing
+    // Erase cursor before drawing
     if (_cursor_visible) {
         draw_cursor(_cx, _cy, _bg);
         _cursor_visible = 0;
@@ -236,7 +272,8 @@ void terminal_putchar(char c)
     }
 
     if (c == '\f') {
-        fb_clear(_bg);
+        /* form-feed: clear only the terminal area */
+        clear_terminal_area();
         _cx = PADDING;
         _cy = PADDING;
         goto redraw_cursor;

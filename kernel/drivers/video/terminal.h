@@ -9,4 +9,5 @@ void terminal_putchar(char c);
 void terminal_puts(const char *s);
 void terminal_cursor_tick(void);
 
+void terminal_set_offset(uint64_t x, uint64_t y);
 void terminal_set_size_from_current(void);
