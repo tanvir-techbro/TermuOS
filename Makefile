@@ -119,7 +119,8 @@ iso: $(KERNEL)
 		limine.conf=iso/limine.conf \
 		-o termuos.iso
 
-run: iso disk.img
+run: iso disk.img tools/tfs_write
+	./tools/tfs_write disk.img apps/HelloGui /mnt/HelloGui.tapp
 	qemu-system-x86_64 -cdrom termuos.iso -cpu qemu64,+syscall \
 		-netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
 		-drive file=disk.img,format=raw,if=ide \
@@ -131,9 +132,12 @@ disk.img: tools/mkfs_tfs
 tools/mkfs_tfs: tools/mkfs_tfs.c
 	cc -O2 -o tools/mkfs_tfs tools/mkfs_tfs.c
 
+tools/tfs_write:
+	cc -O2 -o tools/tfs_write tools/tfs_write.c
+
 limine:
 	git clone https://github.com/limine-bootloader/limine.git \
 		--branch=v8.x-binary --depth=1
 
 clean:
-	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ disk.img tools/mkfs_tfs
+	rm -rf $(BUILD_DIR) $(KERNEL) termuos.iso iso/ disk.img tools/mkfs_tfs tools/tfs_write

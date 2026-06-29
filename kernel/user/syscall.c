@@ -313,32 +313,34 @@ static uint64_t sys_port_receive(uint64_t idx, uint64_t out_addr)
     int r = port_receive(&port_pool[idx], &msg);
     if (r != 0) return (uint64_t)-1;
  
-    /* Layout in userspace:
-     *   [0..3]   sender_pid
-     *   [4..7]   code
-     *   [8..15]  data pointer (we set to &inline_data)
-     *   [16..19] length
-     *   [20..83] inline_data[64]
+    /*
+     * Userspace ipc_message_user_t layout (must match hello_gui_app.c):
+     *
+     *   offset  0: uint32_t sender_pid
+     *   offset  4: uint32_t code
+     *   offset  8: void*    data       ← we set this to &inline_data
+     *   offset 16: uint32_t length
+     *   offset 20: uint8_t  inline_data[64]
      */
-    uint32_t *u32 = (uint32_t *)out_addr;
-    uint8_t  *u8  = (uint8_t  *)out_addr;
+    uint8_t  *base     = (uint8_t *)out_addr;
+    uint32_t *u32      = (uint32_t *)base;
+    uint64_t *data_ptr = (uint64_t *)(base + 8);
+    uint8_t  *inlined  = base + 20;
  
     u32[0] = msg.sender_pid;
     u32[1] = msg.code;
     u32[4] = msg.length;
  
-    /* Copy payload into inline buffer at offset 20 */
-    uint8_t *inline_buf = u8 + 20;
-    uint32_t copy_len = msg.length < IPC_INLINE_MAX ? msg.length : IPC_INLINE_MAX;
+    /* copy up to 64 bytes of payload into the inline buffer */
+    uint32_t copy_len = msg.length < 64 ? msg.length : 64;
     if (msg.data && copy_len > 0) {
         uint8_t *src = (uint8_t *)msg.data;
         for (uint32_t i = 0; i < copy_len; i++)
-            inline_buf[i] = src[i];
+            inlined[i] = src[i];
     }
  
-    /* Set data pointer to point at the inline buffer */
-    uint64_t *data_ptr = (uint64_t *)(u8 + 8);
-    *data_ptr = (uint64_t)inline_buf;
+    /* point data at the inline buffer so app can read it */
+    *data_ptr = (uint64_t)inlined;
  
     return 0;
 }
@@ -346,17 +348,11 @@ static uint64_t sys_port_receive(uint64_t idx, uint64_t out_addr)
 static uint64_t sys_port_create(uint64_t name_addr)
 {
     if (!tlib_check_perm(TLIB_PERM_IPC_RECEIVE)) return (uint64_t)-1;
-
+ 
     const char *name = (const char *)name_addr;
-
-    // validate name length
-    int len = 0;
-    while (name[len] && len < PORT_NAME_MAX - 1) len++;
-    if (len == 0) return (uint64_t)-1;
-
     port_t *p = port_create(name);
     if (!p) return (uint64_t)-1;
-
+ 
     extern port_t port_pool[];
     return (uint64_t)(p - port_pool);
 }
