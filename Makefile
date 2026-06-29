@@ -67,6 +67,10 @@ SRCS += \
 SRCS += kernel/shell/shell.c
 
 SRCS += \
+       kernel/gui/draw.c \
+       kernel/gui/wm.c
+
+SRCS += \
        kernel/user/syscall.c \
        kernel/user/userspace.c
 

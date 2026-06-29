@@ -210,8 +210,6 @@ static uint64_t sys_fstat(uint64_t fd, uint64_t buf_addr)
     return 0;
 }
 
-/* ── existing syscalls ───────────────────────────────────────────────────── */
-
 static uint64_t sys_exit(uint64_t code)
 {
     kprintf("[kernel] process exited: %u\n", code);
@@ -301,28 +299,66 @@ static uint64_t sys_port_send(uint64_t idx, uint64_t code,
                                 (void *)data_addr, (uint32_t)length);
 }
 
-// out_addr points to a userspace ipc_message_t.
-// We only copy code, sender_pid, length — not the kernel heap pointer.
+#define IPC_INLINE_MAX 64
+
 static uint64_t sys_port_receive(uint64_t idx, uint64_t out_addr)
 {
     if (!tlib_check_perm(TLIB_PERM_IPC_RECEIVE)) return (uint64_t)-1;
-
+ 
     extern port_t port_pool[];
     extern uint8_t port_used[];
     if (idx >= 32 || !port_used[idx]) return (uint64_t)-1;
-
+ 
     ipc_message_t msg;
     int r = port_receive(&port_pool[idx], &msg);
     if (r != 0) return (uint64_t)-1;
-
-    // write safe fields to userspace
-    ipc_message_t *out = (ipc_message_t *)out_addr;
-    out->sender_pid = msg.sender_pid;
-    out->code       = msg.code;
-    out->length     = msg.length;
-    out->data       = NULL; // never expose kernel heap pointer to userspace
-
+ 
+    /* Layout in userspace:
+     *   [0..3]   sender_pid
+     *   [4..7]   code
+     *   [8..15]  data pointer (we set to &inline_data)
+     *   [16..19] length
+     *   [20..83] inline_data[64]
+     */
+    uint32_t *u32 = (uint32_t *)out_addr;
+    uint8_t  *u8  = (uint8_t  *)out_addr;
+ 
+    u32[0] = msg.sender_pid;
+    u32[1] = msg.code;
+    u32[4] = msg.length;
+ 
+    /* Copy payload into inline buffer at offset 20 */
+    uint8_t *inline_buf = u8 + 20;
+    uint32_t copy_len = msg.length < IPC_INLINE_MAX ? msg.length : IPC_INLINE_MAX;
+    if (msg.data && copy_len > 0) {
+        uint8_t *src = (uint8_t *)msg.data;
+        for (uint32_t i = 0; i < copy_len; i++)
+            inline_buf[i] = src[i];
+    }
+ 
+    /* Set data pointer to point at the inline buffer */
+    uint64_t *data_ptr = (uint64_t *)(u8 + 8);
+    *data_ptr = (uint64_t)inline_buf;
+ 
     return 0;
+}
+
+static uint64_t sys_port_create(uint64_t name_addr)
+{
+    if (!tlib_check_perm(TLIB_PERM_IPC_RECEIVE)) return (uint64_t)-1;
+
+    const char *name = (const char *)name_addr;
+
+    // validate name length
+    int len = 0;
+    while (name[len] && len < PORT_NAME_MAX - 1) len++;
+    if (len == 0) return (uint64_t)-1;
+
+    port_t *p = port_create(name);
+    if (!p) return (uint64_t)-1;
+
+    extern port_t port_pool[];
+    return (uint64_t)(p - port_pool);
 }
 
 /* ── dispatch ────────────────────────────────────────────────────────────── */
@@ -347,6 +383,7 @@ uint64_t syscall_dispatch(uint64_t num, uint64_t a, uint64_t b, uint64_t c, uint
     case SYS_PORT_FIND: return sys_port_find(a);
     case SYS_PORT_SEND: return sys_port_send(a, b, c, d);
     case SYS_PORT_RECEIVE: return sys_port_receive(a, b);
+    case SYS_PORT_CREATE: return sys_port_create(a);
     default:
         kprintf("[kernel] unknown syscall %llu\n", num);
         return (uint64_t)-1;
